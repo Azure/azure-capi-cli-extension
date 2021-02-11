@@ -1,0 +1,32 @@
+{%- block cluster %}
+{% include "Cluster.yaml" %}
+{% include "AzureCluster.yaml" %}
+{%- endblock cluster %}
+
+{%- block controlplane %}
+{% set SUFFIX = "control-plane" %}
+{% include "KubeadmControlPlane.yaml" %}
+{% include "AzureMachineTemplate.yaml" %}
+{%- endblock controlplane %}
+
+{%- block nodepool %}
+{%- if NODEPOOL_TYPE == "machinepool" %}
+{%- set SUFFIX = "mp-0" %}
+{% include "MachinePool.yaml" %}
+{% include "AzureMachinePool.yaml" %}
+{% include "KubeadmConfig.yaml" %}
+{%- else %}
+{%- set SUFFIX = "md-0" %}
+{% include "MachineDeployment.yaml" %}
+{% include "AzureMachineTemplate.yaml" %}
+{% include "KubeadmConfigTemplate.yaml" %}
+{%- endif %}
+{%- endblock nodepool %}
+
+{%- block windowsnodepool %}
+{%- set SUFFIX = "md-win" %}
+{%- set WINDOWS = True %}
+{% include "MachineDeployment.yaml" %}
+{% include "AzureMachineTemplate.yaml" %}
+{% include "KubeadmConfigTemplate.yaml" %}
+{%- endblock windowsnodepool %}

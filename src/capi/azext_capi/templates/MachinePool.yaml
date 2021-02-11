@@ -1,0 +1,21 @@
+---
+apiVersion: exp.cluster.x-k8s.io/v1alpha3
+kind: MachinePool
+metadata:
+  name: {{ CLUSTER_NAME }}-{{ SUFFIX }}
+spec:
+  clusterName: {{ CLUSTER_NAME }}
+  replicas: {{ WORKER_MACHINE_COUNT or 3 }}
+  template:
+    spec:
+      clusterName: {{ CLUSTER_NAME }}
+      version: {{ KUBERNETES_VERSION or "1.20.2" }}
+      bootstrap:
+        configRef:
+          name: {{ CLUSTER_NAME }}-{{ SUFFIX }}
+          apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
+          kind: KubeadmConfig
+      infrastructureRef:
+        name: {{ CLUSTER_NAME }}-{{ SUFFIX }}
+        apiVersion: exp.infrastructure.cluster.x-k8s.io/v1alpha3
+        kind: AzureMachinePool

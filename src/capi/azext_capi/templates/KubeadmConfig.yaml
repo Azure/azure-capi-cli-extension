@@ -1,0 +1,21 @@
+---
+apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
+kind: KubeadmConfig
+metadata:
+  name: {{ CLUSTER_NAME }}-mp-0
+spec:
+  useExperimentalRetryJoin: true
+  joinConfiguration:
+    nodeRegistration:
+      name: {% raw %}'{{ ds.meta_data["local_hostname"] }}'{% endraw %}
+      kubeletExtraArgs:
+        cloud-provider: azure
+        cloud-config: /etc/kubernetes/azure.json
+  files:
+  - contentFrom:
+      secret:
+        name: {{ CLUSTER_NAME }}-mp-0-azure-json
+        key: worker-node-azure.json
+    owner: root:root
+    path: /etc/kubernetes/azure.json
+    permissions: "0644"

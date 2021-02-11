@@ -1,0 +1,26 @@
+---
+kind: AzureMachineTemplate
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+metadata:
+  name: {{ CLUSTER_NAME }}-{{ SUFFIX }}
+spec:
+  template:
+    spec:
+      location: {{ AZURE_LOCATION }}
+      vmSize: {{ AZURE_CONTROL_PLANE_MACHINE_TYPE or "Standard_D2s_v3" }}
+      osDisk:
+        osType: {% if WINDOWS %}Windows{% else %}Linux{% endif %}
+        diskSizeGB: 128
+        managedDisk:
+          storageAccountType: {% if EPHEMERAL %}Standard_LRS{% else %}Premium_LRS{% endif %}
+        {%- if EPHEMERAL %}
+        diffDiskSettings:
+          option: Local
+        {%- endif %}
+      {%- if SUFFIX == "control-plane" %}
+      dataDisks:
+        - nameSuffix: etcddisk
+          diskSizeGB: 256
+          lun: 0
+      {%- endif %}
+      sshPublicKey: "{{ AZURE_SSH_PUBLIC_KEY_B64 }}"

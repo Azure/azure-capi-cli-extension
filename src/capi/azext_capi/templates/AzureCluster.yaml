@@ -1,0 +1,12 @@
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+kind: AzureCluster
+metadata:
+  name: {{ CLUSTER_NAME }}
+spec:
+  resourceGroup: {{ AZURE_RESOURCE_GROUP or CLUSTER_NAME }}
+  location: {{ AZURE_LOCATION }}
+  subscriptionID: {{ AZURE_SUBSCRIPTION_ID }}
+  networkSpec:
+    vnet:
+      name: {{ AZURE_VNET_NAME or (CLUSTER_NAME ~ "-vnet") }}

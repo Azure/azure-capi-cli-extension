@@ -1,0 +1,23 @@
+---
+apiVersion: cluster.x-k8s.io/v1alpha3
+kind: MachineDeployment
+metadata:
+  name: {{ CLUSTER_NAME }}-{{ SUFFIX }}
+spec:
+  clusterName: {{ CLUSTER_NAME }}
+  replicas: {{ WORKER_MACHINE_COUNT }}
+  selector:
+    matchLabels:
+  template:
+    spec:
+      clusterName: {{ CLUSTER_NAME }}
+      version: {{ KUBERNETES_VERSION }}
+      bootstrap:
+        configRef:
+          name: {{ CLUSTER_NAME }}-{{ SUFFIX }}
+          apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
+          kind: KubeadmConfigTemplate
+      infrastructureRef:
+        name: {{ CLUSTER_NAME }}-{{ SUFFIX }}
+        apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+        kind: AzureMachineTemplate

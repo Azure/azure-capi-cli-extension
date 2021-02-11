@@ -1,0 +1,47 @@
+---
+apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
+kind: KubeadmConfigTemplate
+metadata:
+  name: {{ CLUSTER_NAME }}-{{ SUFFIX }}
+spec:
+  template:
+    spec:
+      useExperimentalRetryJoin: true
+      joinConfiguration:
+        nodeRegistration:
+          name: {% raw %}'{{ ds.meta_data["local_hostname"] }}'{% endraw %}
+          kubeletExtraArgs:
+            cloud-provider: {% if EXTERNAL_CLOUD_PROVIDER %}external{% else %}azure{% endif %}
+            {%- if WINDOWS %}
+            cloud-config: c:/k/azure.json
+            pod-infra-container-image: mcr.microsoft.com/oss/kubernetes/pause:1.4.1
+            {%- else %}
+            cloud-config: /etc/kubernetes/azure.json
+            {%- endif %}
+      files:
+      - contentFrom:
+          secret:
+            name: {{ CLUSTER_NAME }}-{{ SUFFIX }}-azure-json
+            key: worker-node-azure.json
+        owner: root:root
+        path: {% if WINDOWS %}c:/k/azure.json{% else %}/etc/kubernetes/azure.json{% endif %}
+        permissions: "0644"
+      {%- if WINDOWS %}
+      - path: C:/create-external-network.ps1
+        permissions: "0744"
+        content: |
+          # required as a work around for Flannel and Wins bugs
+          # https://github.com/coreos/flannel/issues/1359
+          # https://github.com/kubernetes-sigs/sig-windows-tools/issues/103#issuecomment-709426828
+          ipmo C:\k\debug\hns.psm1;
+          New-HnsNetwork -Type Overlay -AddressPrefix "192.168.255.0/30" -Gateway "192.168.255.1" -Name "External" -AdapterName "Ethernet 2" -SubnetPolicies @(@{Type = "VSID"; VSID = 9999; })
+      - path: C:/configure-ssh.ps1
+        permissions: "0744"
+        content: |
+          [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String("${AZURE_SSH_PUBLIC_KEY_B64:=''}")) | Add-Content C:/ProgramData/ssh/administrators_authorized_keys
+          icacls C:/ProgramData/ssh/administrators_authorized_keys /remove "NT AUTHORITY\Authenticated Users"
+          icacls C:/ProgramData/ssh/administrators_authorized_keys /inheritance:r
+          icacls C:/ProgramData/ssh/administrators_authorized_keys /grant SYSTEM:F
+          icacls C:/ProgramData/ssh/administrators_authorized_keys /grant BUILTIN\Administrators:F
+          restart-service sshd
+      {%- endif %}
