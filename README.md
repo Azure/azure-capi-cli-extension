@@ -1,14 +1,25 @@
-# Project
+# Kubernetes Cluster API extension for Azure CLI
 
-> This repo has been populated by an initial template to help get you started. Please
-> make sure to update the content to build a great experience for community-building.
+![Python](https://img.shields.io/pypi/pyversions/azure-cli.svg?maxAge=2592000)
+![.github/workflows/build.yml](https://github.com/Azure/azure-capi-cli-extension/workflows/.github/workflows/build.yml/badge.svg)
 
-As the maintainer of this project, please make a few updates:
+The **Kubernetes Cluster API extension for Azure CLI** helps you create, evolve, and maintain
+[Kubernetes](https://kubernetes.io/) clusters in a familiar, declarative way. Add this extension
+to your Azure CLI to harness the power and flexibility of [Cluster API](https://cluster-api.sigs.k8s.io/)
+(CAPI) in just a few `az capi` commands.
 
-- Improving this README.MD file to provide a great experience
-- Updating SUPPORT.MD with content about this project's support experience
-- Understanding the security reporting process in SECURITY.MD
-- Remove this section from the README
+## How to Use
+
+* Use `az extension add` with the [latest release](https://github.com/Azure/azure-capi-cli-extension/releases)
+
+## Developer Setup
+
+```shell
+python3 -m venv env
+source env/bin/activate
+python -m pip install -r requirements.txt
+azdev setup -r . -e capi
+```
 
 ## Contributing
 
@@ -26,8 +37,8 @@ contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additio
 
 ## Trademarks
 
-This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft 
-trademarks or logos is subject to and must follow 
+This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft
+trademarks or logos is subject to and must follow
 [Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general).
 Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship.
 Any use of third-party trademarks or logos are subject to those third-party's policies.

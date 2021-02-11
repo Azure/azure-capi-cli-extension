@@ -1,0 +1,11 @@
+{
+    "files.associations": {
+        "**/templates/**/*.yaml": "jinja-yaml"
+    },
+    "files.watcherExclude": {
+        "**/.git/objects/**": true,
+        "**/.git/subtree-cache/**": true,
+        "**/env/**": true
+    },
+    "python.pythonPath": "env/bin/python"
+}

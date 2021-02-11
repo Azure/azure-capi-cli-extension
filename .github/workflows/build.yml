@@ -1,0 +1,91 @@
+on:
+  push:
+    branches:
+      - "*"
+    tags:
+      - "v*"
+
+env:
+  IMAGE: Azure/azure-capi-cli-extension
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+
+    - uses: actions/setup-python@v1
+      with:
+        python-version: 3.6
+
+    - name: Install dependencies
+      run: |
+        python -m venv env
+        source env/bin/activate
+
+        python -m pip install -U pip
+        python -m pip install -r requirements.txt
+        azdev setup --repo . --ext capi
+
+    - name: Lint code
+      run: |
+        source env/bin/activate
+
+        pylint --disable=fixme src
+        flake8 src
+
+    - name: Build extension
+      run: |
+        source env/bin/activate
+
+        azdev extension build capi
+
+        WHEEL=$(find ./dist -name "*.whl" -printf "%f")
+        echo "WHEEL=$WHEEL" >> $GITHUB_ENV
+
+    - name: Validate extension can be installed
+      run: |
+        az extension add -s dist/${{ env.WHEEL }} -y
+        az extension list
+
+    - uses: actions/upload-artifact@v1
+      with:
+        name: dist
+        path: dist
+
+    - id: validate_release
+      if: startsWith(github.ref, 'refs/tags/v')
+      run: |
+        VERSION=$(echo $WHEEL | grep -Po '\w+-\K(\d+\.*)+')
+        if [ "refs/tags/v$VERSION" != "$GITHUB_REF" ]; then
+          echo "The source control tag does not match the version specified for the wheel. Did you remember to update setup.py?"
+          echo "Tag: $GITHUB_REF"
+          echo "Wheel: $VERSION"
+          exit 1
+        fi
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+    - id: create_release
+      uses: actions/create-release@v1
+      if: startsWith(github.ref, 'refs/tags/v')
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: ${{ github.ref }}
+        body: |
+          ```bash
+          az extension add --source https://github.com/Azure/azure-capi-cli-extension/releases/download/v${{ env.VERSION }}/${{ env.WHEEL }}
+          ```
+        draft: true
+        prerelease: true
+
+    - uses: actions/upload-release-asset@v1
+      if: startsWith(github.ref, 'refs/tags/v')
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: dist/${{ env.WHEEL }}
+        asset_name: ${{ env.WHEEL }}
+        asset_content_type: application/zip

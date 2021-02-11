@@ -1,0 +1,84 @@
+---
+kind: KubeadmControlPlane
+apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
+metadata:
+  name: {{ CLUSTER_NAME }}-control-plane
+spec:
+  replicas: {{ CONTROL_PLANE_MACHINE_COUNT or 1 }}
+  infrastructureTemplate:
+    kind: AzureMachineTemplate
+    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+    name: {{ CLUSTER_NAME }}-control-plane
+  kubeadmConfigSpec:
+    useExperimentalRetryJoin: true
+    initConfiguration:
+      nodeRegistration:
+        name: {% raw %}'{{ ds.meta_data["local_hostname"] }}'{% endraw %}
+        kubeletExtraArgs:
+          cloud-provider: {% if EXTERNAL_CLOUD_PROVIDER %}external{% else %}azure{% endif %}
+          cloud-config: /etc/kubernetes/azure.json
+    joinConfiguration:
+      nodeRegistration:
+        name: {% raw %}'{{ ds.meta_data["local_hostname"] }}'{% endraw %}
+        kubeletExtraArgs:
+          cloud-provider: {% if EXTERNAL_CLOUD_PROVIDER %}external{% else %}azure{% endif %}
+          cloud-config: /etc/kubernetes/azure.json
+    clusterConfiguration:
+      apiServer:
+        timeoutForControlPlane: 20m
+        extraArgs:
+          cloud-provider: azure
+          cloud-config: /etc/kubernetes/azure.json
+        extraVolumes:
+          - hostPath: /etc/kubernetes/azure.json
+            mountPath: /etc/kubernetes/azure.json
+            name: cloud-config
+            readOnly: true
+      controllerManager:
+        extraArgs:
+          cloud-provider: {% if EXTERNAL_CLOUD_PROVIDER %}external{% else %}azure{% endif %}
+          cloud-config: /etc/kubernetes/azure.json
+          {%- if WINDOWS %}
+          allocate-node-cidrs: "true"
+          configure-cloud-routes: "false"
+          {%- else %}
+          allocate-node-cidrs: "false"
+          {%- endif %}
+          cluster-name: {{ CLUSTER_NAME }}
+        extraVolumes:
+          - hostPath: /etc/kubernetes/azure.json
+            mountPath: /etc/kubernetes/azure.json
+            name: cloud-config
+            readOnly: true
+      etcd:
+        local:
+          dataDir: /var/lib/etcddisk/etcd
+    files:
+    - contentFrom:
+        secret:
+          name: {{ CLUSTER_NAME }}-control-plane-azure-json
+          key: control-plane-azure.json
+      owner: root:root
+      path: /etc/kubernetes/azure.json
+      permissions: "0644"
+    diskSetup:
+      partitions:
+        - device: /dev/disk/azure/scsi1/lun0
+          tableType: gpt
+          layout: true
+          overwrite: false
+      filesystems:
+        - label: etcd_disk
+          filesystem: ext4
+          device: /dev/disk/azure/scsi1/lun0
+          extraOpts:
+            - "-E"
+            - "lazy_itable_init=1,lazy_journal_init=1"
+        - label: ephemeral0
+          filesystem: ext4
+          device: ephemeral0.1
+          replaceFS: ntfs
+    mounts:
+      - - LABEL=etcd_disk
+        - /var/lib/etcddisk
+  version: {{ KUBERNETES_VERSION or "v1.20.2" }}
