@@ -14,11 +14,25 @@ to your Azure CLI to harness the power and flexibility of [Cluster API](https://
 
 ## Developer Setup
 
+Create a [virtual environment](https://docs.python.org/3/tutorial/venv.html) for Python 3.6 or later
+and activate it for all development and testing on this project:
+
 ```shell
 python3 -m venv env
 source env/bin/activate
+
+python -m pip install -U pip
 python -m pip install -r requirements.txt
 azdev setup -r . -e capi
+```
+
+The `azdev setup` command may take several minutes to complete, so please be patient.
+
+You can lint your code with these commands in the virtual environment:
+
+```shell
+pylint --disable=fixme src
+flake8 src
 ```
 
 ## Contributing
