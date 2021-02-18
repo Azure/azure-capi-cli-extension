@@ -208,38 +208,10 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         subscription_id=os.environ.get("AZURE_SUBSCRIPTION_ID"),
         ssh_public_key=os.environ.get("AZURE_SSH_PUBLIC_KEY_B64", ""),
         vnet_name=None,
+        machinepool=False,
+        ephemeral_disks=False,
+        windows=False,
         yes=False):
-    init_environment(cmd)
-
-    # Prompt to create resource group if it doesn't exist
-    from azure.cli.core.commands.client_factory import get_mgmt_service_client
-    from azure.cli.core.profiles import ResourceType
-
-    resource_client = get_mgmt_service_client(
-        cmd.cli_ctx, ResourceType.MGMT_RESOURCE_RESOURCES)
-    if not resource_client.resource_groups.check_existence(resource_group_name):
-        logger.warning("Couldn't find the specified resource group.")
-        if not location:
-            raise CLIError(
-                'Please specify a location so a resource group can be created.')
-        create = yes
-        if not create:
-            msg = 'Do you want to create a new resource group named "{}" in Azure\'s {} region?'.format(
-                resource_group_name, location)
-            create = prompt_y_n(msg, default="n")
-        if create:
-            rg_model = resource_client.models().ResourceGroup
-            # TODO: add tags to resource group?
-            parameters = rg_model(location=location)
-            output = resource_client.resource_groups.create_or_update(
-                resource_group_name, parameters)
-            logger.info(output)
-            logger.warning("Created resource group %s in %s.", resource_group_name, location)
-    # Check for general prerequisites
-    # init_environment(cmd)
-    # Identify or create a Kubernetes v1.16+ management cluster
-    find_management_cluster_retry(cmd.cli_ctx)
-
     # Generate the cluster configuration
     env = Environment(loader=PackageLoader(
         __name__, "templates"), auto_reload=False)
@@ -256,6 +228,9 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         "AZURE_VNET_NAME": vnet_name,
         "CLUSTER_NAME": capi_name,
         "KUBERNETES_VERSION": kubernetes_version,
+        "EPHEMERAL": ephemeral_disks,
+        "WINDOWS": windows,
+        "NODEPOOL_TYPE": "machinepool" if machinepool else "machinedeployment",
     }
     manifest = template.render(args)
 
@@ -273,8 +248,40 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         manifest_file.write(manifest)
     logger.warning("wrote manifest file to %s", filename)
 
-    msg = 'Do you want to create this Kubernetes cluster "{}" in the Azure resource group "{}"?'
-    if prompt_y_n(msg, default="n"):
+    msg = 'Do you want to create this Kubernetes cluster "{}" in the Azure resource group "{}"?'.format(
+        capi_name, resource_group_name)
+    if yes or prompt_y_n(msg, default="n"):
+        init_environment(cmd)
+
+        # Prompt to create resource group if it doesn't exist
+        from azure.cli.core.commands.client_factory import get_mgmt_service_client
+        from azure.cli.core.profiles import ResourceType
+
+        resource_client = get_mgmt_service_client(
+            cmd.cli_ctx, ResourceType.MGMT_RESOURCE_RESOURCES)
+        if not resource_client.resource_groups.check_existence(resource_group_name):
+            logger.warning("Couldn't find the specified resource group.")
+            if not location:
+                raise CLIError(
+                    'Please specify a location so a resource group can be created.')
+            create = yes
+            if not create:
+                msg = 'Do you want to create a new resource group named "{}" in Azure\'s {} region?'.format(
+                    resource_group_name, location)
+                create = prompt_y_n(msg, default="n")
+            if create:
+                rg_model = resource_client.models().ResourceGroup
+                # TODO: add tags to resource group?
+                parameters = rg_model(location=location)
+                output = resource_client.resource_groups.create_or_update(
+                    resource_group_name, parameters)
+                logger.info(output)
+                logger.warning("Created resource group %s in %s.", resource_group_name, location)
+        # Check for general prerequisites
+        # init_environment(cmd)
+        # Identify or create a Kubernetes v1.16+ management cluster
+        find_management_cluster_retry(cmd.cli_ctx)
+
         # Apply the cluster configuration
         cmd = ["kubectl", "apply", "-f", filename]
         try:
