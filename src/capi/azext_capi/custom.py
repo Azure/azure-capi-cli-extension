@@ -39,7 +39,7 @@ def init_environment(cmd):
     check_preqreqs(cmd, install=True)
     # Create a management cluster if needed
     try:
-        find_management_cluster()
+        find_management_cluster_retry(cmd.cli_ctx)
     except CLIError as err:
         if str(err) == "No CAPZ installation found":
             _install_capz_components(cmd)
@@ -89,7 +89,7 @@ Where should we create a management cluster?
                 raise CLIError(err)
         else:
             return
-    _install_capz_components(cmd)
+        _install_capz_components(cmd)
 
 
 def _install_capz_components(cmd):
@@ -204,11 +204,13 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         node_machine_type=os.environ.get("AZURE_NODE_MACHINE_TYPE"),
         node_machine_count=os.environ.get("AZURE_NODE_MACHINE_COUNT", 3),
         kubernetes_version=os.environ.get("AZURE_KUBERNETES_VERSION", "1.20.2"),
-        azure_cloud="AzurePublicCloud",
+        # azure_cloud=os.environ.get("AZURE_ENVIRONMENT", "AzurePublicCloud"),
         subscription_id=os.environ.get("AZURE_SUBSCRIPTION_ID"),
         ssh_public_key=os.environ.get("AZURE_SSH_PUBLIC_KEY_B64", ""),
         vnet_name=None,
         yes=False):
+    init_environment(cmd)
+
     # Prompt to create resource group if it doesn't exist
     from azure.cli.core.commands.client_factory import get_mgmt_service_client
     from azure.cli.core.profiles import ResourceType
@@ -266,38 +268,33 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
     #         "AZURE_ENVIRONMENT": azure_cloud,
     #     }
     # )
-    filename = "foo.yaml"
+    filename = capi_name + ".yaml"
     with open(filename, "w") as manifest_file:
         manifest_file.write(manifest)
-    logger.info("wrote manifest file to %s", filename)
-    # # Apply the cluster configuration
-    # cmd = ["kubectl", "apply", "-f", filename]
-    # try:
-    #     output = subprocess.check_output(cmd, universal_newlines=True)
-    #     logger.info("`{}` returned:\n{}".format(" ".join(cmd), output))
-    # except subprocess.CalledProcessError as err:
-    #     raise CLIError(err)
-    # TODO: create RG for user with AAD Pod ID scoped to it
+    logger.warning("wrote manifest file to %s", filename)
+
+    msg = 'Do you want to create this Kubernetes cluster "{}" in the Azure resource group "{}"?'
+    if prompt_y_n(msg, default="n"):
+        # Apply the cluster configuration
+        cmd = ["kubectl", "apply", "-f", filename]
+        try:
+            output = subprocess.check_output(cmd, universal_newlines=True)
+            logger.info("`{}` returned:\n{}".format(" ".join(cmd), output))
+        except subprocess.CalledProcessError as err:
+            raise CLIError(err)
+        # TODO: create RG for user with AAD Pod ID scoped to it
 
 
 def delete_workload_cluster(cmd):
-    # Check for local prerequisites
-    check_preqreqs(cmd)
+    raise UnimplementedError
+
+
+def list_workload_clusters(cmd):
+    raise UnimplementedError
 
 
 def update_workload_cluster(cmd):
-    # Check for local prerequisites
-    check_preqreqs(cmd)
-
-
-# def list_capi(cmd, resource_group_name=None):
-#     raise CLIError('TODO: Implement `capi list`')
-
-
-# def update_capi(cmd, instance, tags=None):
-#     with cmd.update_context(instance) as c:
-#         c.set_param('tags', tags)
-#     return instance
+    raise UnimplementedError
 
 
 def check_preqreqs(cmd, install=False):
@@ -348,6 +345,7 @@ def find_management_cluster_retry(cli_ctx, delay=3):
         return False
     hook.add(message='CAPI components are running', value=1.0, total_val=1.0)
     logger.info('CAPI components are running')
+    return True
 
 
 def find_management_cluster():
