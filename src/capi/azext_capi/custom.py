@@ -286,22 +286,22 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         cmd = ["kubectl", "apply", "-f", filename]
         try:
             output = subprocess.check_output(cmd, universal_newlines=True)
-            logger.info("`{}` returned:\n{}".format(" ".join(cmd), output))
+            logger.info("%s returned:\n%s", " ".join(cmd), output)
         except subprocess.CalledProcessError as err:
             raise CLIError(err)
         # TODO: create RG for user with AAD Pod ID scoped to it
 
 
 def delete_workload_cluster(cmd):
-    raise UnimplementedError
+    raise NotImplementedError
 
 
 def list_workload_clusters(cmd):
-    raise UnimplementedError
+    raise NotImplementedError
 
 
 def update_workload_cluster(cmd):
-    raise UnimplementedError
+    raise NotImplementedError
 
 
 def check_preqreqs(cmd, install=False):
