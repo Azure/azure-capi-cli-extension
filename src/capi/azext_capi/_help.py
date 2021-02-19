@@ -44,7 +44,11 @@ helps['capi management'] = """
     type: group
     short-summary: Manage Cluster API management clusters.
     long-summary: |
-        A CAPI management cluster blah blah blah.
+        A CAPI management cluster manages the lifecycle of workload clusters.
+        A management cluster is also where one or more infrastructure providers run,
+        and where resources such as machines are stored.
+
+        See https://capz.sigs.k8s.io/ for more information.
 """
 
 helps['capi management create'] = """

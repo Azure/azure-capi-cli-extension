@@ -15,7 +15,7 @@ except ImportError:
     from distutils import log as logger
     logger.warn("Wheel is not available, disabling bdist_wheel hook")
 
-# TODO: Confirm this is the right version number you want and it matches your
+# Confirm this is the right version number you want and it matches your
 # HISTORY.rst entry.
 VERSION = '0.1.1'
 
@@ -33,7 +33,7 @@ CLASSIFIERS = [
     'License :: OSI Approved :: MIT License',
 ]
 
-# TODO: Add any additional SDK dependencies here
+# Add any additional SDK dependencies here
 DEPENDENCIES = [
     'azure-cli-core',
     "Jinja2",
@@ -57,5 +57,6 @@ setup(
     classifiers=CLASSIFIERS,
     packages=find_packages(),
     install_requires=DEPENDENCIES,
-    package_data={'azext_capi': ['azext_metadata.json']},
+    package_data={'azext_capi': ['azext_metadata.json', 'templates/*']},
+    include_package_data=True,
 )

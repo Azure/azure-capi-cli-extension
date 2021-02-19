@@ -16,17 +16,13 @@
 {% include "AzureMachinePool.yaml" %}
 {% include "KubeadmConfig.yaml" %}
 {%- else %}
+{%- if WINDOWS %}
+{%- set SUFFIX = "md-win"%}
+{%- else %}
 {%- set SUFFIX = "md-0" %}
+{%- endif %}
 {% include "MachineDeployment.yaml" %}
 {% include "AzureMachineTemplate.yaml" %}
 {% include "KubeadmConfigTemplate.yaml" %}
 {%- endif %}
 {%- endblock nodepool %}
-
-{%- block windowsnodepool %}
-{%- set SUFFIX = "md-win" %}
-{%- set WINDOWS = True %}
-{% include "MachineDeployment.yaml" %}
-{% include "AzureMachineTemplate.yaml" %}
-{% include "KubeadmConfigTemplate.yaml" %}
-{%- endblock windowsnodepool %}
