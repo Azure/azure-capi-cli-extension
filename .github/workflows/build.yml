@@ -4,6 +4,9 @@ on:
       - "*"
     tags:
       - "v*"
+  pull_request:
+    branches:
+      - master
 
 env:
   IMAGE: Azure/azure-capi-cli-extension
