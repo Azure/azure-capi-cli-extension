@@ -23,7 +23,7 @@ source env/bin/activate
 
 python -m pip install -U pip
 python -m pip install -r requirements.txt
-azdev setup -r . -e capi
+azdev setup --repo . --ext capi --verbose
 ```
 
 The `azdev setup` command may take several minutes to complete, so please be patient.
