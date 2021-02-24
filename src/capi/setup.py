@@ -17,7 +17,7 @@ except ImportError:
 
 # Confirm this is the right version number you want and it matches your
 # HISTORY.rst entry.
-VERSION = '0.1.1'
+VERSION = '0.1.0'
 
 # The full list of classifiers is available at
 # https://pypi.python.org/pypi?%3Aaction=list_classifiers
@@ -51,7 +51,7 @@ setup(
     description='Microsoft Azure Command-Line Tools Cluster API Extension',
     author='Microsoft Corporation',
     author_email='Matt.Boersma@microsoft.com',
-    url='https://github.com/mboersma/azcapi',
+    url='https://github.com/Azure/azure-capi-cli-extension',
     long_description=README + '\n\n' + HISTORY,
     license='MIT',
     classifiers=CLASSIFIERS,

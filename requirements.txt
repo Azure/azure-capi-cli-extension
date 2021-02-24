@@ -1,3 +1,4 @@
 azdev
 black
 Jinja2
+MarkupSafe
