@@ -22,10 +22,15 @@ import time
 from jinja2 import Environment, PackageLoader
 from knack.log import get_logger
 from knack.prompting import prompt_choice_list, prompt_y_n
-from knack.util import CLIError
 from six.moves.urllib.request import urlopen  # pylint: disable=import-error
 
 from azure.cli.core import get_default_cli
+from azure.cli.core.azclierror import FileOperationError
+from azure.cli.core.azclierror import InvalidArgumentValueError
+from azure.cli.core.azclierror import RequiredArgumentMissingError
+from azure.cli.core.azclierror import ResourceNotFoundError
+from azure.cli.core.azclierror import UnclassifiedUserFault
+from azure.cli.core.azclierror import ValidationError
 from azure.cli.core.util import in_cloud_console
 from azure.cli.core.api import get_config_dir
 
@@ -40,7 +45,7 @@ def init_environment(cmd):
     # Create a management cluster if needed
     try:
         find_management_cluster_retry(cmd.cli_ctx)
-    except CLIError as err:
+    except ResourceNotFoundError as err:
         if str(err) == "No CAPZ installation found":
             _install_capz_components(cmd)
     except subprocess.CalledProcessError:
@@ -67,14 +72,14 @@ Where should we create a management cluster?
                 output = subprocess.check_output(cmd, universal_newlines=True)
                 logger.info("%s returned:\n%s", " ".join(cmd), output)
             except subprocess.CalledProcessError as err:
-                raise CLIError(err)
+                raise UnclassifiedUserFault(err)
             cmd = ["az", "aks", "create", "-g",
                    cluster_name, "--name", cluster_name]
             try:
                 output = subprocess.check_output(cmd, universal_newlines=True)
                 logger.info("%s returned:\n%s", " ".join(cmd), output)
             except subprocess.CalledProcessError as err:
-                raise CLIError(err)
+                raise UnclassifiedUserFault(err)
         elif choice_index == 1:
             logger.info("kind management cluster")
             # Install kind
@@ -86,7 +91,7 @@ Where should we create a management cluster?
                 output = subprocess.check_output(cmd, universal_newlines=True)
                 logger.info("%s returned:\n%s", " ".join(cmd), output)
             except subprocess.CalledProcessError as err:
-                raise CLIError(err)
+                raise UnclassifiedUserFault(err)
         else:
             return
         _install_capz_components(cmd)
@@ -100,7 +105,7 @@ def _install_capz_components(cmd):
         output = subprocess.check_output(cmd, universal_newlines=True)
         logger.info("%s returned:\n%s", " ".join(cmd), output)
     except subprocess.CalledProcessError as err:
-        raise CLIError("Can't locate a Kubernetes cluster") from err
+        raise UnclassifiedUserFault("Can't locate a Kubernetes cluster") from err
 
 
 def create_management_cluster(cmd):
@@ -112,7 +117,7 @@ def create_management_cluster(cmd):
         output = subprocess.check_output(cmd, universal_newlines=True)
         logger.info("%s returned:\n%s", " ".join(cmd), output)
     except subprocess.CalledProcessError as err:
-        raise CLIError("Can't locate a Kubernetes cluster") from err
+        raise UnclassifiedUserFault("Can't locate a Kubernetes cluster") from err
 
 
 def delete_management_cluster(cmd):  # , yes=False):
@@ -123,7 +128,7 @@ def delete_management_cluster(cmd):  # , yes=False):
         output = subprocess.check_output(cmd, universal_newlines=True)
         logger.info("%s returned:\n%s", " ".join(cmd), output)
     except subprocess.CalledProcessError as err:
-        raise CLIError(err)
+        raise UnclassifiedUserFault(err)
     namespaces = [
         "capi-kubeadm-bootstrap-system",
         "capi-kubeadm-control-plane-system",
@@ -137,7 +142,7 @@ def delete_management_cluster(cmd):  # , yes=False):
         output = subprocess.check_output(cmd, universal_newlines=True)
         logger.info("%s returned:\n%s", " ".join(cmd), output)
     except subprocess.CalledProcessError as err:
-        raise CLIError(err)
+        raise UnclassifiedUserFault(err)
 
 
 def move_management_cluster(cmd):
@@ -151,7 +156,7 @@ def show_management_cluster(_cmd, yes=False):
     kubeconfig = config.get("capi", "kubeconfig",
                             fallback=os.environ.get("KUBECONFIG"))
     if not kubeconfig:
-        raise CLIError("no kubeconfig")
+        raise InvalidArgumentValueError("no kubeconfig")
     # make a $HOME/.azure/capi directory for storing cluster configurations
     path = os.path.join(get_config_dir(), "capi")
     if not os.path.exists(path):
@@ -165,7 +170,7 @@ def show_management_cluster(_cmd, yes=False):
         contexts = output.splitlines()
         logger.info(contexts)
     except subprocess.CalledProcessError as err:
-        raise CLIError(err)
+        raise UnclassifiedUserFault(err)
 
     msg = path + "ok"
     if not yes and prompt_y_n(msg, default="n"):
@@ -189,7 +194,7 @@ def update_management_cluster(cmd):
         output = subprocess.check_output(cmd, universal_newlines=True)
         logger.info("%s returned:\n%s", " ".join(cmd), output)
     except subprocess.CalledProcessError as err:
-        raise CLIError(err)
+        raise UnclassifiedUserFault(err)
 
 
 def create_workload_cluster(  # pylint: disable=unused-argument,too-many-arguments,too-many-locals
@@ -262,7 +267,7 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         if not resource_client.resource_groups.check_existence(resource_group_name):
             logger.warning("Couldn't find the specified resource group.")
             if not location:
-                raise CLIError(
+                raise RequiredArgumentMissingError(
                     'Please specify a location so a resource group can be created.')
             create = yes
             if not create:
@@ -288,7 +293,7 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
             output = subprocess.check_output(cmd, universal_newlines=True)
             logger.info("%s returned:\n%s", " ".join(cmd), output)
         except subprocess.CalledProcessError as err:
-            raise CLIError(err)
+            raise UnclassifiedUserFault(err)
         # TODO: create RG for user with AAD Pod ID scoped to it
 
 
@@ -328,7 +333,7 @@ def check_environment_var(var):
         try:
             val = os.environ[var]
         except KeyError as err:
-            raise CLIError("Required environment variable {} was not found.".format(err))
+            raise RequiredArgumentMissingError("Required environment variable {} was not found.".format(err))
         # Set the base64-encoded variable as a convenience
         val = base64.b64encode(val.encode("utf-8")).decode("ascii")
         os.environ[var_b64] = val
@@ -346,7 +351,7 @@ def find_management_cluster_retry(cli_ctx, delay=3):
         try:
             find_management_cluster()
             break
-        except CLIError:
+        except ResourceNotFoundError:
             time.sleep(delay + delay * i)
     else:
         return False
@@ -359,12 +364,12 @@ def find_management_cluster():
     cmd = ["kubectl", "cluster-info"]
     match = check_cmd(cmd, r"Kubernetes control plane.*?is running")
     if match is None:
-        raise CLIError("No accessible Kubernetes cluster found")
+        raise ResourceNotFoundError("No accessible Kubernetes cluster found")
     cmd = ["kubectl", "get", "pods", "--namespace", "capz-system"]
     try:
         match = check_cmd(cmd, r"capz-controller-manager-.+?Running")
         if match is None:
-            raise CLIError("No CAPZ installation found")
+            raise ResourceNotFoundError("No CAPZ installation found")
     except subprocess.CalledProcessError as err:
         logger.error(err)
 
@@ -412,7 +417,7 @@ def install_clusterctl(_cmd, client_version="latest", install_location=None, sou
     if system in ("Darwin", "Linux"):
         file_url = source_url.format(client_version, system.lower())
     else:  # TODO: support Windows someday?
-        raise CLIError(
+        raise ValidationError(
             'The clusterctl binary is not available for "{}"'.format(system))
 
     # ensure installation directory exists
@@ -436,10 +441,8 @@ def install_clusterctl(_cmd, client_version="latest", install_location=None, sou
         )
         os.chmod(install_location, perms)
     except IOError as ex:
-        raise CLIError(
-            "Connection error while attempting to download client ({})".format(
-                ex)
-        )
+        err_msg = "Connection error while attempting to download client ({})".format(ex)
+        raise FileOperationError(err_msg)
 
     logger.warning(
         "Please ensure that %s is in your search PATH, so the `%s` command can be found.",
@@ -474,7 +477,7 @@ def install_kind(_cmd, client_version="v0.10.0", install_location=None, source_u
     elif system == "Darwin":
         file_url = source_url.format(client_version, "darwin")
     else:
-        raise CLIError('System "{}" is not supported by kind.'.format(system))
+        raise InvalidArgumentValueError('System "{}" is not supported by kind.'.format(system))
 
     logger.warning('Downloading client to "%s" from "%s"',
                    install_location, file_url)
@@ -488,7 +491,7 @@ def install_kind(_cmd, client_version="v0.10.0", install_location=None, source_u
             | stat.S_IXOTH,
         )
     except IOError as ex:
-        raise CLIError(
+        raise FileOperationError(
             "Connection error while attempting to download client ({})".format(
                 ex)
         )
@@ -558,7 +561,7 @@ def install_kubectl(cmd, client_version="latest", install_location=None, source_
     elif system == "Darwin":
         file_url = base_url.format(client_version, "darwin", "kubectl")
     else:
-        raise CLIError(
+        raise InvalidArgumentValueError(
             "Proxy server ({}) does not exist on the cluster.".format(system)
         )
 
@@ -574,10 +577,8 @@ def install_kubectl(cmd, client_version="latest", install_location=None, source_
             | stat.S_IXOTH,
         )
     except IOError as ex:
-        raise CLIError(
-            "Connection error while attempting to download client ({})".format(
-                ex)
-        )
+        err_msg = "Connection error while attempting to download client ({})".format(ex)
+        raise FileOperationError(err_msg) from ex
 
     if system == "Windows":
         # be verbose, as the install_location is likely not in Windows's search PATHs
