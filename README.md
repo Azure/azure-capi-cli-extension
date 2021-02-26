@@ -4,12 +4,13 @@
 ![.github/workflows/build.yml](https://github.com/Azure/azure-capi-cli-extension/workflows/.github/workflows/build.yml/badge.svg)
 
 The **Kubernetes Cluster API extension for Azure CLI** helps you create, evolve, and maintain
-[Kubernetes](https://kubernetes.io/) clusters in a familiar, declarative way. Add this extension
+[Kubernetes](https://kubernetes.io/) clusters on Azure in a familiar, declarative way. Add this extension
 to your Azure CLI to harness the power and flexibility of [Cluster API](https://cluster-api.sigs.k8s.io/)
 (CAPI) in just a few `az capi` commands.
 
 ## How to Use
 
+* [Install `az`](https://docs.microsoft.com/cli/azure/install-azure-cli), the command-line interface to the Microsoft Azure cloud
 * Use `az extension add` with the [latest release](https://github.com/Azure/azure-capi-cli-extension/releases)
 
 ## Developer Setup
