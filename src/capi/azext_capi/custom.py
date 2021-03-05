@@ -372,6 +372,13 @@ def find_management_cluster():
             raise ResourceNotFoundError("No CAPZ installation found")
     except subprocess.CalledProcessError as err:
         logger.error(err)
+    cmd = ["kubectl", "get", "pods", "--namespace", "capi-webhook-system"]
+    try:
+        match = check_cmd(cmd, r"capz-controller-manager-.+?Running")
+        if match is None:
+            raise ResourceNotFoundError("No CAPZ installation found")
+    except subprocess.CalledProcessError as err:
+        logger.error(err)
 
 
 def check_cmd(cmd, regexp=None):
