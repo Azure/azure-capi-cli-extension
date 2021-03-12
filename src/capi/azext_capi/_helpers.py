@@ -1,3 +1,12 @@
+# --------------------------------------------------------------------------------------------
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT License. See License.txt in the project root for license information.
+# --------------------------------------------------------------------------------------------
+
+"""
+This module contains helper functions for the az capi extension.
+"""
+
 import platform
 import ssl
 import sys
@@ -8,6 +17,7 @@ from azure.cli.core.util import in_cloud_console
 
 
 def ssl_context():
+    """Returns an SSL context appropriate for the python version and environment."""
     if sys.version_info < (3, 4) or (in_cloud_console() and platform.system() == "Windows"):
         try:
             # added in python 2.7.13 and 3.6
@@ -19,6 +29,7 @@ def ssl_context():
 
 
 def urlretrieve(url, filename):
+    """Retrieves the contents of a URL to a file."""
     req = urlopen(url, context=ssl_context())
     with open(filename, "wb") as out:
         out.write(req.read())

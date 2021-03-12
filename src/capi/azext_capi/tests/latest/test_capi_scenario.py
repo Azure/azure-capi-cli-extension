@@ -18,11 +18,12 @@ class CapiScenarioTest(ScenarioTest):
     # @ResourceGroupPreparer(name_prefix='cli_test_capi')
     # def test_capi(self, resource_group):
     def test_capi(self):
+        pass
 
-        self.kwargs.update({
-            'name': 'test1'
-        })
-
+        # self.kwargs.update({
+        #     'name': 'test1'
+        # })
+        #
         # self.cmd('capi create -g {rg} -n {name} --tags foo=doo', checks=[
         #     self.check('tags.foo', 'doo'),
         #     self.check('name', '{name}')

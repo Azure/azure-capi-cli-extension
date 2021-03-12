@@ -15,7 +15,6 @@ import re
 import stat
 import string
 import subprocess
-import sys
 import time
 
 from jinja2 import Environment, PackageLoader
@@ -32,7 +31,7 @@ from azure.cli.core.azclierror import UnclassifiedUserFault
 from azure.cli.core.azclierror import ValidationError
 from azure.cli.core.api import get_config_dir
 
-import ._helpers as helpers
+from ._helpers import ssl_context, urlretrieve
 
 from ._params import _get_default_install_location
 
@@ -439,7 +438,7 @@ def install_clusterctl(_cmd, client_version="latest", install_location=None, sou
     logger.warning('Downloading client to "%s" from "%s"',
                    install_location, file_url)
     try:
-        helpers.urlretrieve(file_url, install_location)
+        urlretrieve(file_url, install_location)
         perms = (
             os.stat(install_location).st_mode
             | stat.S_IXUSR
@@ -489,7 +488,7 @@ def install_kind(_cmd, client_version="v0.10.0", install_location=None, source_u
     logger.warning('Downloading client to "%s" from "%s"',
                    install_location, file_url)
     try:
-        helpers.urlretrieve(file_url, install_location)
+        urlretrieve(file_url, install_location)
         os.chmod(
             install_location,
             os.stat(install_location).st_mode
@@ -541,7 +540,7 @@ def install_kubectl(cmd, client_version="latest", install_location=None, source_
             source_url = "https://mirror.azure.cn/kubernetes/kubectl"
 
     if client_version == "latest":
-        context = helpers.ssl_context()
+        context = ssl_context()
         version = urlopen(source_url + "/stable.txt", context=context).read()
         client_version = version.decode("UTF-8").strip()
     else:
@@ -575,7 +574,7 @@ def install_kubectl(cmd, client_version="latest", install_location=None, source_
     logger.warning('Downloading client to "%s" from "%s"',
                    install_location, file_url)
     try:
-        helpers.urlretrieve(file_url, install_location)
+        urlretrieve(file_url, install_location)
         os.chmod(
             install_location,
             os.stat(install_location).st_mode
