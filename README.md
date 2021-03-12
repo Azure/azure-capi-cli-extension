@@ -63,7 +63,7 @@ flake8 src
 You can test your code with this command:
 
 ```shell
-azdev test capz
+azdev test capi
 ```
 
 ## Contributing
