@@ -1,5 +1,5 @@
 ---
-apiVersion: cluster.x-k8s.io/v1alpha3
+apiVersion: cluster.x-k8s.io/v1alpha4
 kind: Cluster
 metadata:
   name: {{ CLUSTER_NAME }}
@@ -11,10 +11,10 @@ spec:
       cidrBlocks:
       - {% if WINDOWS %}10.244.0.0/16{% else %}192.168.0.0/16{% endif %}
   infrastructureRef:
-    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha4
     kind: AzureCluster
     name: {{ CLUSTER_NAME }}
   controlPlaneRef:
     kind: KubeadmControlPlane
-    apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
+    apiVersion: controlplane.cluster.x-k8s.io/v1alpha4
     name: {{ CLUSTER_NAME }}-control-plane

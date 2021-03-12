@@ -37,6 +37,12 @@ jobs:
         pylint --disable=fixme src
         flake8 src
 
+    - name: Run unit tests
+      run: |
+        source env/bin/activate
+
+        azdev test capi
+
     - name: Build extension
       run: |
         source env/bin/activate
