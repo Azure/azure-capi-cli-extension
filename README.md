@@ -4,19 +4,41 @@
 ![.github/workflows/build.yml](https://github.com/Azure/azure-capi-cli-extension/workflows/.github/workflows/build.yml/badge.svg)
 
 The **Kubernetes Cluster API extension for Azure CLI** helps you create, evolve, and maintain
-[Kubernetes](https://kubernetes.io/) clusters on Azure in a familiar, declarative way. Add this extension
-to your Azure CLI to harness the power and flexibility of [Cluster API](https://cluster-api.sigs.k8s.io/)
-(CAPI) in just a few `az capi` commands.
+[Kubernetes](https://kubernetes.io/) clusters on Azure in a familiar, declarative way. Add this
+extension to your Azure CLI to harness the power and flexibility of
+[Cluster API](https://cluster-api.sigs.k8s.io/) (CAPI) in just a few `az capi` commands.
 
 ## How to Use
 
-* [Install `az`](https://docs.microsoft.com/cli/azure/install-azure-cli), the command-line interface to the Microsoft Azure cloud
-* Use `az extension add` with the [latest release](https://github.com/Azure/azure-capi-cli-extension/releases)
+* [Install `az`](https://docs.microsoft.com/cli/azure/install-azure-cli), the command-line
+  interface to the Microsoft Azure cloud
+* Use `az extension add` with
+  the [latest release](https://github.com/Azure/azure-capi-cli-extension/releases)
+* Run `az capi -h` to get an overview of the commands available to you
 
 ## Developer Setup
 
-Create a [virtual environment](https://docs.python.org/3/tutorial/venv.html) for Python 3.6 or later
-and activate it for all development and testing on this project:
+Developing this Azure CLI extension requires a virtual environment with Python 3.6 or later,
+several required libraries, and the `azdev` tool.
+
+You can jump into development right now on the web or on your workstation with
+[GitHub Codespaces](https://github.com/features/codespaces), or you can set up a local environment.
+
+### GitHub Codespaces
+
+From the [GitHub homepage](https://github.com/Azure/azure-capi-cli-extension) for this project,
+click the big green "Code" button and choose "Open with Codespaces." After some time to prepare the
+environment, you'll be presented with the web-based version of Visual Studio Code with this
+project's source code ready to hack on.
+
+You can also use codespaces for local development. After opening the codespace as described
+above, click the "Open in Visual Studio Code" button on the environment preparation screen.
+
+### Local Environment
+
+Create a [virtual environment](https://docs.python.org/3/tutorial/venv.html) for Python 3.6 or
+later, activate it, install required libraries, and tell the `azdev` tool about our
+"capi" extension:
 
 ```shell
 python3 -m venv env
@@ -29,11 +51,19 @@ azdev setup --repo . --ext capi --verbose
 
 The `azdev setup` command may take several minutes to complete, so please be patient.
 
+### Linting and Testing
+
 You can lint your code with these commands in the virtual environment:
 
 ```shell
 pylint --disable=fixme src
 flake8 src
+```
+
+You can test your code with this command:
+
+```shell
+azdev test capi
 ```
 
 ## Contributing
