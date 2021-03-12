@@ -439,12 +439,7 @@ def install_clusterctl(_cmd, client_version="latest", install_location=None, sou
                    install_location, file_url)
     try:
         urlretrieve(file_url, install_location)
-        perms = (
-            os.stat(install_location).st_mode
-            | stat.S_IXUSR
-            | stat.S_IXGRP
-            | stat.S_IXOTH
-        )
+        perms = (os.stat(install_location).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
         os.chmod(install_location, perms)
     except IOError as ex:
         err_msg = "Connection error while attempting to download client ({})".format(ex)
@@ -491,10 +486,7 @@ def install_kind(_cmd, client_version="v0.10.0", install_location=None, source_u
         urlretrieve(file_url, install_location)
         os.chmod(
             install_location,
-            os.stat(install_location).st_mode
-            | stat.S_IXUSR
-            | stat.S_IXGRP
-            | stat.S_IXOTH,
+            os.stat(install_location).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
         )
     except IOError as ex:
         raise FileOperationError(
@@ -577,10 +569,7 @@ def install_kubectl(cmd, client_version="latest", install_location=None, source_
         urlretrieve(file_url, install_location)
         os.chmod(
             install_location,
-            os.stat(install_location).st_mode
-            | stat.S_IXUSR
-            | stat.S_IXGRP
-            | stat.S_IXOTH,
+            os.stat(install_location).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
         )
     except IOError as ex:
         err_msg = "Connection error while attempting to download client ({})".format(ex)
