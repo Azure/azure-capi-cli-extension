@@ -1,21 +1,19 @@
-*To add a feature or to rework an existing one, please begin by submitting a markdown document
-with your proposed changes. This will allow others to review and suggest improvements before moving
-forward with implementation.*
+<!--
+To add a feature or change an existing one, please begin by submitting a markdown document
+that briefly describes your proposal. This will allow others to review and suggest improvements
+before you move forward with implementation.
+-->
 
 **Description**
 
 **History Notes**
 
 <!--
-Please summarize this PR so that a reader of the history file can understand the essential
-change. Make sure to note any breaking changes, and update HISTORY.rst with the same summary.
+Please summarize this PR for a reader of the history file. Make sure to note any breaking changes,
+and update HISTORY.rst with the summary, such as:
 
-Examples:
-
-```
 BREAKING CHANGE: az capi create: Change arguments and require "--location".
 az capi list: Add --output=table mode.
-```
 -->
 
 ---

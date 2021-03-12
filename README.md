@@ -62,9 +62,9 @@ azdev test
 
 ### Submitting Pull Requests
 
-To add a feature or to rework an existing one, please begin by submitting a markdown document
-with your proposed changes. This will allow others to review and suggest improvements before moving
-forward with implementation.
+To add a feature or change an existing one, please begin by submitting a markdown document
+that briefly describes your proposal. This will allow others to review and suggest improvements
+before you move forward with implementation.
 
 Since this extension hopes to become an official one and eventually to merge upstream,
 pull requests should follow the
