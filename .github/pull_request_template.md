@@ -9,15 +9,11 @@ before you move forward with implementation.
 **History Notes**
 
 <!--
-Please summarize this PR so that a reader of the history file can understand the essential
-change. Make sure to note any breaking changes, and update HISTORY.rst with the same summary.
+Please summarize this PR for a reader of the history file. Make sure to note any breaking changes,
+and update HISTORY.rst with the summary, such as:
 
-Examples:
-
-```
 BREAKING CHANGE: az capi create: Change arguments and require "--location".
 az capi list: Add --output=table mode.
-```
 -->
 
 ---
