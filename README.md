@@ -53,18 +53,22 @@ The `azdev setup` command may take several minutes to complete, so please be pat
 
 ### Linting and Testing
 
-You can lint your code with these commands in the virtual environment:
+You can lint and test your code with these commands in the virtual environment:
 
 ```shell
-pylint --disable=fixme src
-flake8 src
+azdev style
+azdev test
 ```
 
-You can test your code with this command:
+### Submitting Pull Requests
 
-```shell
-azdev test capi
-```
+To add a feature or change an existing one, please begin by submitting a markdown document
+that briefly describes your proposal. This will allow others to review and suggest improvements
+before you move forward with implementation.
+
+Since this extension hopes to become an official one and eventually to merge upstream,
+pull requests should follow the
+[azure-cli guidelines](https://github.com/Azure/azure-cli/tree/dev/doc/authoring_command_modules#submitting-pull-requests).
 
 ## Contributing
 
