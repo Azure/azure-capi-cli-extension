@@ -8,6 +8,7 @@
 # pylint: disable=missing-docstring
 
 import base64
+import json
 import os
 import platform
 import random
@@ -46,7 +47,7 @@ def init_environment(cmd):
         find_management_cluster_retry(cmd.cli_ctx)
     except ResourceNotFoundError as err:
         if str(err) == "No CAPZ installation found":
-            _install_capz_components(cmd)
+            _install_capz_components()
     except subprocess.CalledProcessError:
         providers = ['AKS - a managed cluster in Azure',
                      'kind - a local docker-based cluster', "exit - don't create a management cluster"]
@@ -93,16 +94,16 @@ Where should we create a management cluster?
                 raise UnclassifiedUserFault(err)
         else:
             return
-        _install_capz_components(cmd)
+        _install_capz_components()
 
 
-def _install_capz_components(cmd):
+def _install_capz_components():
     os.environ["EXP_MACHINE_POOL"] = "true"
     os.environ["EXP_CLUSTER_RESOURCE_SET"] = "true"
-    cmd = ["clusterctl", "init", "--infrastructure", "azure"]
+    command = ["clusterctl", "init", "--infrastructure", "azure"]
     try:
-        output = subprocess.check_output(cmd, universal_newlines=True)
-        logger.info("%s returned:\n%s", " ".join(cmd), output)
+        output = subprocess.check_output(command, universal_newlines=True)
+        logger.info("%s returned:\n%s", " ".join(command), output)
     except subprocess.CalledProcessError as err:
         raise UnclassifiedUserFault("Can't locate a Kubernetes cluster") from err
 
@@ -111,21 +112,21 @@ def create_management_cluster(cmd):
     # TODO: add user confirmation
     check_preqreqs(cmd)
 
-    cmd = ["clusterctl", "init", "--infrastructure", "azure"]
+    command = ["clusterctl", "init", "--infrastructure", "azure"]
     try:
-        output = subprocess.check_output(cmd, universal_newlines=True)
-        logger.info("%s returned:\n%s", " ".join(cmd), output)
+        output = subprocess.check_output(command, universal_newlines=True)
+        logger.info("%s returned:\n%s", " ".join(command), output)
     except subprocess.CalledProcessError as err:
         raise UnclassifiedUserFault("Can't locate a Kubernetes cluster") from err
 
 
-def delete_management_cluster(cmd):  # , yes=False):
+def delete_management_cluster(cmd):  # pylint: disable=unused-argument
     # TODO: add user confirmation
-    cmd = ["clusterctl", "delete", "--all",
-           "--include-crd", "--include-namespace"]
+    command = ["clusterctl", "delete", "--all",
+               "--include-crd", "--include-namespace"]
     try:
-        output = subprocess.check_output(cmd, universal_newlines=True)
-        logger.info("%s returned:\n%s", " ".join(cmd), output)
+        output = subprocess.check_output(command, universal_newlines=True)
+        logger.info("%s returned:\n%s", " ".join(command), output)
     except subprocess.CalledProcessError as err:
         raise UnclassifiedUserFault(err)
     namespaces = [
@@ -136,10 +137,10 @@ def delete_management_cluster(cmd):  # , yes=False):
         "capz-system",
         "cert-manager",
     ]
-    cmd = ["kubectl", "delete", "namespace", "--ignore-not-found"] + namespaces
+    command = ["kubectl", "delete", "namespace", "--ignore-not-found"] + namespaces
     try:
-        output = subprocess.check_output(cmd, universal_newlines=True)
-        logger.info("%s returned:\n%s", " ".join(cmd), output)
+        output = subprocess.check_output(command, universal_newlines=True)
+        logger.info("%s returned:\n%s", " ".join(command), output)
     except subprocess.CalledProcessError as err:
         raise UnclassifiedUserFault(err)
 
@@ -301,7 +302,25 @@ def delete_workload_cluster(cmd):
 
 
 def list_workload_clusters(cmd):
-    raise NotImplementedError
+    cmd = ["kubectl", "get", "clusters", "-o", "json"]
+    try:
+        output = subprocess.check_output(cmd, universal_newlines=True)
+        logger.info("%s returned:\n%s", " ".join(cmd), output)
+    except subprocess.CalledProcessError as err:
+        raise UnclassifiedUserFault(err)
+    return json.loads(output)
+
+
+def show_workload_cluster(cmd, name):  # pylint: disable=unused-argument
+    # TODO: --output=table should print the output of `clusterctl describe` directly.
+    # command = ["clusterctl", "describe", "cluster", name]
+    command = ["kubectl", "get", "cluster", name, "--output", "json"]
+    try:
+        output = subprocess.check_output(command, stderr=subprocess.STDOUT, universal_newlines=True)
+        logger.info("%s returned:\n%s", " ".join(command), output)
+    except subprocess.CalledProcessError as err:
+        raise UnclassifiedUserFault(err)
+    return json.loads(output)
 
 
 def update_workload_cluster(cmd):
@@ -380,9 +399,9 @@ def find_management_cluster():
         logger.error(err)
 
 
-def check_cmd(cmd, regexp=None):
-    output = subprocess.check_output(cmd, universal_newlines=True)
-    logger.info("%s returned:\n%s", " ".join(cmd), output)
+def check_cmd(command, regexp=None):
+    output = subprocess.check_output(command, universal_newlines=True)
+    logger.info("%s returned:\n%s", " ".join(command), output)
     if regexp is not None:
         return re.search(regexp, output)
     return False
