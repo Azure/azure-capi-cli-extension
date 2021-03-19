@@ -34,6 +34,9 @@ project's source code ready to hack on.
 You can also use codespaces for local development. After opening the codespace as described
 above, click the "Open in Visual Studio Code" button on the environment preparation screen.
 
+**NOTE:** when the Codespace runs for the first time, the `create-dev-env.sh` script will still be
+running. After a few minutes, the virtual environment will be configured and ready.
+
 ### Local Environment
 
 Create a [virtual environment](https://docs.python.org/3/tutorial/venv.html) for Python 3.6 or
@@ -41,21 +44,18 @@ later, activate it, install required libraries, and tell the `azdev` tool about 
 "capi" extension:
 
 ```shell
-python3 -m venv env
-source env/bin/activate
-
-python -m pip install -U pip
-python -m pip install -r requirements.txt
-azdev setup --repo . --ext capi --verbose
+./create-dev-env.sh
 ```
 
-The `azdev setup` command may take several minutes to complete, so please be patient.
+The script may take several minutes to complete, so please be patient.
 
 ### Linting and Testing
 
-You can lint and test your code with these commands in the virtual environment:
+You can lint and test your code with these commands:
 
 ```shell
+source ./env/bin/activate
+
 azdev style
 azdev test
 ```

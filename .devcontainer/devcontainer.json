@@ -1,7 +1,9 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the README at:
+// https://github.com/microsoft/vscode-dev-containers/tree/v0.163.1/containers/python-3
 {
 	"name": "Python 3",
 	"build": {
-		"dockerfile": "base.Dockerfile",
+		"dockerfile": "Dockerfile",
 		"context": "..",
 		"args": {
 			// Update 'VARIANT' to pick a Python version: 3, 3.6, 3.7, 3.8, 3.9
@@ -38,7 +40,7 @@
 	// "forwardPorts": [],
 
 	// Use 'postCreateCommand' to run commands after the container is created.
-	"postCreateCommand": "VIRTUAL_ENV=${PIPX_HOME} azdev setup --repo . --ext capi --verbose",
+	"postCreateCommand": "./create-dev-env.sh > create-dev-env.log 2>&1",
 
 	// Comment out connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
 	"remoteUser": "vscode"
