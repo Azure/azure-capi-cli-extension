@@ -8,6 +8,13 @@ The **Kubernetes Cluster API extension for Azure CLI** helps you create, evolve,
 extension to your Azure CLI to harness the power and flexibility of
 [Cluster API](https://cluster-api.sigs.k8s.io/) (CAPI) in just a few `az capi` commands.
 
+---
+**NOTE**
+This project is at a proof-of-concept stage: some commands don't work yet and everything is
+subject to change based on your feedback.
+
+---
+
 ## How to Use
 
 * [Install `az`](https://docs.microsoft.com/cli/azure/install-azure-cli), the command-line

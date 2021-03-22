@@ -1,13 +1,13 @@
 ---
 kind: KubeadmControlPlane
-apiVersion: controlplane.cluster.x-k8s.io/v1alpha4
+apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
 metadata:
   name: {{ CLUSTER_NAME }}-control-plane
 spec:
   replicas: {{ CONTROL_PLANE_MACHINE_COUNT or 1 }}
   infrastructureTemplate:
     kind: AzureMachineTemplate
-    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha4
+    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
     name: {{ CLUSTER_NAME }}-control-plane
   kubeadmConfigSpec:
     useExperimentalRetryJoin: true

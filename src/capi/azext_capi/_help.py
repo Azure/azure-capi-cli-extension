@@ -33,6 +33,20 @@ helps['capi delete'] = """
         See https://capz.sigs.k8s.io/ for more information.
 """
 
+helps['capi show'] = """
+    type: command
+    short-summary: Show details of a workload cluster.
+    long-summary: |
+        See https://capz.sigs.k8s.io/ for more information.
+"""
+
+helps['capi list'] = """
+    type: command
+    short-summary: List workload clusters.
+    long-summary: |
+        See https://capz.sigs.k8s.io/ for more information.
+"""
+
 helps['capi update'] = """
     type: command
     short-summary: Update a workload cluster.
