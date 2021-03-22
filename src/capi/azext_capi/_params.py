@@ -34,6 +34,10 @@ def load_arguments(self, _):
     #                  default=_get_default_install_location('kubectl'))
 
 
+def get_virtualenv():
+    return os.getenv("VIRTUAL_ENV")
+
+
 def _get_default_install_location(exe_name):
     system = platform.system()
     if system == 'Windows':
@@ -43,7 +47,11 @@ def _get_default_install_location(exe_name):
         install_location = os.path.join(
             home_dir, r'.azure-{0}\{0}.exe'.format(exe_name))
     elif system in ('Linux', 'Darwin'):
-        install_location = '/usr/local/bin/{}'.format(exe_name)
+        venv = get_virtualenv()
+        if venv:
+            install_location = '{}/bin/{}'.format(venv, exe_name)
+        else:
+            install_location = '/usr/local/bin/{}'.format(exe_name)
     else:
         install_location = None
     return install_location
