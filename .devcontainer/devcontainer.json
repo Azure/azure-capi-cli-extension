@@ -14,6 +14,10 @@
 		}
 	},
 
+	// Settings for Docker-in-Docker support
+	"runArgs": ["--init", "--privileged"],
+	"overrideCommand": false,
+
 	// Set *default* container specific settings.json values on container create.
 	"settings": {
 		"terminal.integrated.shell.linux": "/bin/bash",

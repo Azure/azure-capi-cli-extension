@@ -4,6 +4,13 @@
 ARG VARIANT="3"
 FROM mcr.microsoft.com/vscode/devcontainers/python:0-${VARIANT}
 
+# Install Docker-in-Docker support
+COPY .devcontainer/library-scripts/*.sh /tmp/library-scripts/
+RUN apt-get update && /bin/bash /tmp/library-scripts/docker-in-docker-debian.sh
+ENTRYPOINT ["/usr/local/share/docker-init.sh"]
+VOLUME ["/var/lib/docker"]
+CMD ["sleep", "infinity"]
+
 # [Option] Install Node.js
 ARG INSTALL_NODE="false"
 ARG NODE_VERSION="lts/*"
