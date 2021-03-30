@@ -40,7 +40,7 @@ from ._params import _get_default_install_location
 logger = get_logger(__name__)  # pylint: disable=invalid-name
 
 
-def init_environment(cmd):
+def init_environment(cmd, prompt=True):
     check_preqreqs(cmd, install=True)
     # Create a management cluster if needed
     try:
@@ -49,22 +49,38 @@ def init_environment(cmd):
         if str(err) == "No CAPZ installation found":
             _install_capz_components()
     except subprocess.CalledProcessError:
-        providers = ['AKS - a managed cluster in Azure',
-                     'kind - a local docker-based cluster', "exit - don't create a management cluster"]
-        prompt = """\
-No Kubernetes cluster was found using the default configuration.
+        if prompt:
+            choices = ["kind - a local docker-based cluster",
+                       "AKS - a managed cluster in Azure",
+                       "exit - don't create a management cluster"]
+            prompt = """\
+    No Kubernetes cluster was found using the default configuration.
 
-Cluster API needs a "management cluster" to run its components.
-Learn more from the Cluster API Book:
-  https://cluster-api.sigs.k8s.io/user/concepts.html
+    Cluster API needs a "management cluster" to run its components.
+    Learn more from the Cluster API Book:
+    https://cluster-api.sigs.k8s.io/user/concepts.html
 
-Where should we create a management cluster?
-"""
-        choice_index = prompt_choice_list(prompt, providers)
+    Where should we create a management cluster?
+    """
+            choice_index = prompt_choice_list(prompt, choices)
+        else:
+            choice_index = 0
         random_id = ''.join(random.choices(
             string.ascii_lowercase + string.digits, k=6))
         cluster_name = "capi-manager-" + random_id
         if choice_index == 0:
+            logger.info("kind management cluster")
+            # Install kind
+            kind_path = "kind"
+            if not which("kind"):
+                kind_path = install_kind(cmd)
+            cmd = [kind_path, "create", "cluster", "--name", cluster_name]
+            try:
+                output = subprocess.check_output(cmd, universal_newlines=True)
+                logger.info("%s returned:\n%s", " ".join(cmd), output)
+            except subprocess.CalledProcessError as err:
+                raise UnclassifiedUserFault(err)
+        elif choice_index == 1:
             logger.info("AKS management cluster")
             cmd = ["az", "group", "create", "-l",
                    "southcentralus", "--name", cluster_name]
@@ -75,18 +91,6 @@ Where should we create a management cluster?
                 raise UnclassifiedUserFault(err)
             cmd = ["az", "aks", "create", "-g",
                    cluster_name, "--name", cluster_name]
-            try:
-                output = subprocess.check_output(cmd, universal_newlines=True)
-                logger.info("%s returned:\n%s", " ".join(cmd), output)
-            except subprocess.CalledProcessError as err:
-                raise UnclassifiedUserFault(err)
-        elif choice_index == 1:
-            logger.info("kind management cluster")
-            # Install kind
-            kind_path = "kind"
-            if not which("kind"):
-                kind_path = install_kind(cmd)
-            cmd = [kind_path, "create", "cluster", "--name", cluster_name]
             try:
                 output = subprocess.check_output(cmd, universal_newlines=True)
                 logger.info("%s returned:\n%s", " ".join(cmd), output)
@@ -161,7 +165,6 @@ def show_management_cluster(_cmd, yes=False):
     path = os.path.join(get_config_dir(), "capi")
     if not os.path.exists(path):
         os.makedirs(path)
-    # TODO: if not
     command = ["kubectl", "config", "get-contexts",
                "--no-headers", "--output", "name"]
     try:
@@ -209,7 +212,6 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         node_machine_type=os.environ.get("AZURE_NODE_MACHINE_TYPE"),
         node_machine_count=os.environ.get("AZURE_NODE_MACHINE_COUNT", 3),
         kubernetes_version=os.environ.get("AZURE_KUBERNETES_VERSION", "1.20.2"),
-        # azure_cloud=os.environ.get("AZURE_ENVIRONMENT", "AzurePublicCloud"),
         subscription_id=os.environ.get("AZURE_SUBSCRIPTION_ID"),
         ssh_public_key=os.environ.get("AZURE_SSH_PUBLIC_KEY_B64", ""),
         vnet_name=None,
@@ -218,9 +220,8 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         windows=False,
         yes=False):
     # Generate the cluster configuration
-    env = Environment(loader=PackageLoader(
-        __name__, "templates"), auto_reload=False)
-    logger.info("Available templates: %s", env.list_templates())
+    env = Environment(loader=PackageLoader(__name__, "templates"), auto_reload=False)
+    logger.debug("Available templates: %s", env.list_templates())
     template = env.get_template("base.jinja")
 
     args = {
@@ -238,16 +239,6 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         "NODEPOOL_TYPE": "machinepool" if machinepool else "machinedeployment",
     }
     manifest = template.render(args)
-
-    # TODO: Some CAPZ options need to be set as env vars, not clusterctl arguments.
-    # os.environ.update(
-    #     {
-    #         "AZURE_CONTROL_PLANE_MACHINE_TYPE": control_plane_machine_type,
-    #         "AZURE_NODE_MACHINE_TYPE": node_machine_type,
-    #         "AZURE_LOCATION": location,
-    #         "AZURE_ENVIRONMENT": azure_cloud,
-    #     }
-    # )
     filename = capi_name + ".yaml"
     with open(filename, "w") as manifest_file:
         manifest_file.write(manifest)
@@ -255,46 +246,41 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
 
     msg = 'Do you want to create this Kubernetes cluster "{}" in the Azure resource group "{}"?'.format(
         capi_name, resource_group_name)
-    if yes or prompt_y_n(msg, default="n"):
-        init_environment(cmd)
+    if not yes and not prompt_y_n(msg, default="n"):
+        return
 
-        # Prompt to create resource group if it doesn't exist
-        from azure.cli.core.commands.client_factory import get_mgmt_service_client
-        from azure.cli.core.profiles import ResourceType
+    init_environment(cmd, not yes)
 
-        resource_client = get_mgmt_service_client(
-            cmd.cli_ctx, ResourceType.MGMT_RESOURCE_RESOURCES)
-        if not resource_client.resource_groups.check_existence(resource_group_name):
-            logger.warning("Couldn't find the specified resource group.")
-            if not location:
-                raise RequiredArgumentMissingError(
-                    'Please specify a location so a resource group can be created.')
-            create = yes
-            if not create:
-                msg = 'Do you want to create a new resource group named "{}" in Azure\'s {} region?'.format(
-                    resource_group_name, location)
-                create = prompt_y_n(msg, default="n")
-            if create:
-                rg_model = resource_client.models().ResourceGroup
-                # TODO: add tags to resource group?
-                parameters = rg_model(location=location)
-                output = resource_client.resource_groups.create_or_update(
-                    resource_group_name, parameters)
-                logger.info(output)
-                logger.warning("Created resource group %s in %s.", resource_group_name, location)
-        # Check for general prerequisites
-        # init_environment(cmd)
-        # Identify or create a Kubernetes v1.16+ management cluster
-        find_management_cluster_retry(cmd.cli_ctx)
+    # Identify or create a Kubernetes v1.16+ management cluster
+    find_management_cluster_retry(cmd.cli_ctx)
 
-        # Apply the cluster configuration
-        cmd = ["kubectl", "apply", "-f", filename]
-        try:
-            output = subprocess.check_output(cmd, universal_newlines=True)
-            logger.info("%s returned:\n%s", " ".join(cmd), output)
-        except subprocess.CalledProcessError as err:
-            raise UnclassifiedUserFault(err)
-        # TODO: create RG for user with AAD Pod ID scoped to it
+    # Apply the cluster configuration
+    cmd = ["kubectl", "apply", "-f", filename]
+    try:
+        output = subprocess.check_output(cmd, universal_newlines=True)
+        logger.info("%s returned:\n%s", " ".join(cmd), output)
+    except subprocess.CalledProcessError as err:
+        raise UnclassifiedUserFault(err)
+
+    # show the cluster's initialization progress
+    # TODO: should we loop on this command with `watch`?
+    logger.warning("\nCluster Status:")
+    cmd = ["clusterctl", "describe", "cluster", capi_name]
+    try:
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError as err:
+        raise UnclassifiedUserFault(err)
+
+    # write the kubeconfig for the workload cluster to a file
+    cmd = ["clusterctl", "get", "kubeconfig", capi_name]
+    try:
+        output = subprocess.check_output(cmd, universal_newlines=True)
+    except subprocess.CalledProcessError as err:
+        raise UnclassifiedUserFault(err)
+    filename = capi_name + ".cfg"
+    with open(filename, "w") as manifest_file:
+        manifest_file.write(manifest)
+    logger.warning("wrote kubeconfig file to %s", filename)
 
 
 def delete_workload_cluster(cmd):
@@ -380,7 +366,7 @@ def find_management_cluster_retry(cli_ctx, delay=3):
 
 def find_management_cluster():
     cmd = ["kubectl", "cluster-info"]
-    match = check_cmd(cmd, r"Kubernetes control plane.*?is running")
+    match = check_cmd(cmd, r"Kubernetes .*?is running")
     if match is None:
         raise ResourceNotFoundError("No accessible Kubernetes cluster found")
     cmd = ["kubectl", "get", "pods", "--namespace", "capz-system"]
