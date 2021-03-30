@@ -16,7 +16,6 @@ import re
 import stat
 import string
 import subprocess
-import sys
 import time
 
 from jinja2 import Environment, PackageLoader
