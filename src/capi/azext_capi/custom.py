@@ -16,6 +16,7 @@ import re
 import stat
 import string
 import subprocess
+import sys
 import time
 
 from jinja2 import Environment, PackageLoader
@@ -165,7 +166,6 @@ def show_management_cluster(_cmd, yes=False):
     path = os.path.join(get_config_dir(), "capi")
     if not os.path.exists(path):
         os.makedirs(path)
-    # TODO: if not
     command = ["kubectl", "config", "get-contexts",
                "--no-headers", "--output", "name"]
     try:
@@ -247,22 +247,41 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
 
     msg = 'Do you want to create this Kubernetes cluster "{}" in the Azure resource group "{}"?'.format(
         capi_name, resource_group_name)
-    if yes or prompt_y_n(msg, default="n"):
-        init_environment(cmd, not yes)
+    if not yes and not prompt_y_n(msg, default="n"):
+        return
 
-        # Identify or create a Kubernetes v1.16+ management cluster
-        find_management_cluster_retry(cmd.cli_ctx)
+    init_environment(cmd, not yes)
 
-        # Apply the cluster configuration
-        cmd = ["kubectl", "apply", "-f", filename]
-        try:
-            output = subprocess.check_output(cmd, universal_newlines=True)
-            logger.info("%s returned:\n%s", " ".join(cmd), output)
-        except subprocess.CalledProcessError as err:
-            raise UnclassifiedUserFault(err)
+    # Identify or create a Kubernetes v1.16+ management cluster
+    find_management_cluster_retry(cmd.cli_ctx)
 
-        # TODO: show the cluster's initialization progress
-        # TODO: write the kubeconfig for the workload cluster to a file
+    # Apply the cluster configuration
+    cmd = ["kubectl", "apply", "-f", filename]
+    try:
+        output = subprocess.check_output(cmd, universal_newlines=True)
+        logger.info("%s returned:\n%s", " ".join(cmd), output)
+    except subprocess.CalledProcessError as err:
+        raise UnclassifiedUserFault(err)
+
+    # show the cluster's initialization progress
+    # TODO: should we loop on this command with `watch`?
+    logger.warning("\nCluster Status:")
+    cmd = ["clusterctl", "describe", "cluster", capi_name]
+    try:
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError as err:
+        raise UnclassifiedUserFault(err)
+
+    # write the kubeconfig for the workload cluster to a file
+    cmd = ["clusterctl", "get", "kubeconfig", capi_name]
+    try:
+        output = subprocess.check_output(cmd, universal_newlines=True)
+    except subprocess.CalledProcessError as err:
+        raise UnclassifiedUserFault(err)
+    filename = capi_name + ".cfg"
+    with open(filename, "w") as manifest_file:
+        manifest_file.write(manifest)
+    logger.warning("wrote kubeconfig file to %s", filename)
 
 
 def delete_workload_cluster(cmd):
