@@ -277,9 +277,9 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         output = subprocess.check_output(cmd, universal_newlines=True)
     except subprocess.CalledProcessError as err:
         raise UnclassifiedUserFault(err)
-    filename = capi_name + ".cfg"
-    with open(filename, "w") as manifest_file:
-        manifest_file.write(manifest)
+    filename = capi_name + ".kubeconfig"
+    with open(filename, "w") as kubeconfig_file:
+        kubeconfig_file.write(output)
     logger.warning("wrote kubeconfig file to %s", filename)
 
 
