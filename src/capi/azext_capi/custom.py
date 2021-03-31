@@ -182,6 +182,7 @@ def show_management_cluster(_cmd, yes=False):
 
 
 def update_management_cluster(cmd):
+    exit_if_no_management_cluster()
     # Check for local prerequisites
     check_preqreqs(cmd)
     cmd = [
@@ -284,6 +285,7 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
 
 
 def delete_workload_cluster(cmd, capi_name):
+    exit_if_no_management_cluster()
     cmd = ["kubectl", "delete", "cluster", capi_name]
     try:
         output = subprocess.check_output(cmd, universal_newlines=True)
@@ -293,6 +295,7 @@ def delete_workload_cluster(cmd, capi_name):
 
 
 def list_workload_clusters(cmd):
+    exit_if_no_management_cluster()
     cmd = ["kubectl", "get", "clusters", "-o", "json"]
     try:
         output = subprocess.check_output(cmd, universal_newlines=True)
@@ -303,6 +306,7 @@ def list_workload_clusters(cmd):
 
 
 def show_workload_cluster(cmd, capi_name):  # pylint: disable=unused-argument
+    exit_if_no_management_cluster()
     # TODO: --output=table should print the output of `clusterctl describe` directly.
     # command = ["clusterctl", "describe", "cluster", name]
     command = ["kubectl", "get", "cluster", capi_name, "--output", "json"]
@@ -390,8 +394,15 @@ def find_management_cluster():
         logger.error(err)
 
 
+def exit_if_no_management_cluster():
+    try:
+        find_management_cluster()
+    except (ResourceNotFoundError, subprocess.CalledProcessError) as err:
+        raise UnclassifiedUserFault('No management cluster found. Please create one with "az capi management create".') from err
+
+
 def check_cmd(command, regexp=None):
-    output = subprocess.check_output(command, universal_newlines=True)
+    output = subprocess.check_output(command, universal_newlines=True, stderr=subprocess.STDOUT)
     logger.info("%s returned:\n%s", " ".join(command), output)
     if regexp is not None:
         return re.search(regexp, output)
