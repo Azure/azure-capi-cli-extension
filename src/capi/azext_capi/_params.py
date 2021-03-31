@@ -20,18 +20,11 @@ def load_arguments(self, _):
     from azure.cli.core.commands.parameters import tags_type
 
     capi_name_type = CLIArgumentType(
-        options_list='--capi-name-name', help='Name of the Capi.', id_part='name')
+        options_list='--capi-name-name', help='Name of the CAPI Kubernetes cluster.')
 
     with self.argument_context('capi') as ctx:
         ctx.argument('tags', tags_type)
         ctx.argument('capi_name', capi_name_type, options_list=['--name', '-n'])
-
-    with self.argument_context('capi list') as ctx:
-        ctx.argument('capi_name', capi_name_type, id_part=None)
-
-    # with self.argument_context('capi init') as ctx:
-    #     ctx.argument('install_location', type=file_type, completer=FilesCompleter(),
-    #                  default=_get_default_install_location('kubectl'))
 
 
 def get_virtualenv():
@@ -39,6 +32,7 @@ def get_virtualenv():
 
 
 def _get_default_install_location(exe_name):
+    install_location = None
     system = platform.system()
     if system == 'Windows':
         home_dir = os.environ.get('USERPROFILE')
@@ -52,6 +46,4 @@ def _get_default_install_location(exe_name):
             install_location = '{}/bin/{}'.format(venv, exe_name)
         else:
             install_location = '/usr/local/bin/{}'.format(exe_name)
-    else:
-        install_location = None
     return install_location
