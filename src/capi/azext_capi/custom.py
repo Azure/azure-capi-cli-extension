@@ -398,7 +398,8 @@ def exit_if_no_management_cluster():
     try:
         find_management_cluster()
     except (ResourceNotFoundError, subprocess.CalledProcessError) as err:
-        raise UnclassifiedUserFault('No management cluster found. Please create one with "az capi management create".') from err
+        msg = 'No management cluster found. Please create one with "az capi management create".'
+        raise UnclassifiedUserFault(msg) from err
 
 
 def check_cmd(command, regexp=None):
