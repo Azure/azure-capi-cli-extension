@@ -1,0 +1,6 @@
+[run]
+omit =
+    */tests/*
+source =
+    src/
+branch = True
