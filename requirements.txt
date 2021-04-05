@@ -1,4 +1,6 @@
 azdev
 black
+coverage
 Jinja2
 MarkupSafe
+pytest-cov
