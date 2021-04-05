@@ -52,7 +52,6 @@ class CapiScenarioTest(ScenarioTest):
             self.assertEqual(mock.call_count, 2)
 
 
-
 AZ_CAPI_LIST_JSON = """\
 {
   "apiVersion": "v1",
