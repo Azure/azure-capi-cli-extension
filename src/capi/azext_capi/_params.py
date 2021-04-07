@@ -17,14 +17,12 @@ from knack.arguments import CLIArgumentType
 def load_arguments(self, _):
     """Loads command arguments into the parser."""
 
-    from azure.cli.core.commands.parameters import tags_type
-
     capi_name_type = CLIArgumentType(
         options_list='--capi-name-name', help='Name of the CAPI Kubernetes cluster.')
 
     with self.argument_context('capi') as ctx:
-        ctx.argument('tags', tags_type)
         ctx.argument('capi_name', capi_name_type, options_list=['--name', '-n'])
+        ctx.argument('yes', options_list=['--yes', '-y'])
 
 
 def get_virtualenv():

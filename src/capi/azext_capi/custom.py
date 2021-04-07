@@ -53,14 +53,14 @@ def init_environment(cmd, prompt=True):
             choices = ["kind - a local docker-based cluster",
                        "AKS - a managed cluster in Azure",
                        "exit - don't create a management cluster"]
-            prompt = """\
-    No Kubernetes cluster was found using the default configuration.
+            prompt = """
+No Kubernetes cluster was found using the default configuration.
 
-    Cluster API needs a "management cluster" to run its components.
-    Learn more from the Cluster API Book:
-    https://cluster-api.sigs.k8s.io/user/concepts.html
+Cluster API needs a "management cluster" to run its components.
+Learn more from the Cluster API Book:
+https://cluster-api.sigs.k8s.io/user/concepts.html
 
-    Where should we create a management cluster?
+Where should we create a management cluster?
     """
             choice_index = prompt_choice_list(prompt, choices)
         else:
@@ -256,35 +256,60 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
     find_management_cluster_retry(cmd.cli_ctx)
 
     # Apply the cluster configuration
-    cmd = ["kubectl", "apply", "-f", filename]
+    command = ["kubectl", "apply", "-f", filename]
     try:
-        output = subprocess.check_output(cmd, universal_newlines=True)
-        logger.info("%s returned:\n%s", " ".join(cmd), output)
+        output = subprocess.check_output(command, universal_newlines=True)
+        logger.info("%s returned:\n%s", " ".join(command), output)
     except subprocess.CalledProcessError as err:
         raise UnclassifiedUserFault(err)
 
     # show the cluster's initialization progress
     # TODO: should we loop on this command with `watch`?
     logger.warning("\nCluster Status:")
-    cmd = ["clusterctl", "describe", "cluster", capi_name]
+    command = ["clusterctl", "describe", "cluster", capi_name]
     try:
-        subprocess.run(cmd, check=True)
+        subprocess.run(command, check=True)
     except subprocess.CalledProcessError as err:
         raise UnclassifiedUserFault(err)
 
     # write the kubeconfig for the workload cluster to a file
+    # TODO: retry this operation several times, then give up and just print the command
+    delay = 10
+    hook = cmd.cli_ctx.get_progress_controller(True)
+    msg = "Waiting for kubeconfig to become available "
+    hook.add(message=msg, value=0, total_val=1.0)
+    logger.info(msg)
+    for i in range(0, 30):
+        hook.add(message=msg, value=0.1 * i, total_val=1.0)
+        try:
+            status = get_kubeconfig(capi_name)
+            break
+        except UnclassifiedUserFault:
+            time.sleep(delay + delay * i)
+    else:
+        msg = """\
+Kubeconfig wasn't available after waiting 5 minutes.
+When the cluster is ready, run this command to fetch the kubeconfig:
+  clusterctl get kubeconfig {}
+""".format(capi_name)
+        raise ResourceNotFoundError(msg)
+    hook.add(message=status, value=1.0, total_val=1.0)
+
+
+def get_kubeconfig(capi_name):
     cmd = ["clusterctl", "get", "kubeconfig", capi_name]
     try:
-        output = subprocess.check_output(cmd, universal_newlines=True)
+        output = subprocess.check_output(cmd, universal_newlines=True, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as err:
         raise UnclassifiedUserFault(err)
     filename = capi_name + ".kubeconfig"
     with open(filename, "w") as kubeconfig_file:
         kubeconfig_file.write(output)
-    logger.warning("wrote kubeconfig file to %s", filename)
+    return "Wrote kubeconfig file to {} ".format(filename)
 
 
 def delete_workload_cluster(cmd, capi_name):
+    # TODO: add user confirmation
     exit_if_no_management_cluster()
     cmd = ["kubectl", "delete", "cluster", capi_name]
     try:
@@ -355,12 +380,11 @@ def check_environment_var(var):
 
 def find_management_cluster_retry(cli_ctx, delay=3):
     hook = cli_ctx.get_progress_controller(True)
-    hook.add(message='Waiting for CAPI components to be running',
-             value=0, total_val=1.0)
-    logger.info('Waiting for CAPI components to be running')
+    msg = "Waiting for CAPI components to be running"
+    hook.add(message=msg, value=0, total_val=1.0)
+    logger.info(msg)
     for i in range(0, 10):
-        hook.add(message='Waiting for CAPI components to be running',
-                 value=0.1 * i, total_val=1.0)
+        hook.add(message=msg, value=0.1 * i, total_val=1.0)
         try:
             find_management_cluster()
             break
@@ -368,8 +392,9 @@ def find_management_cluster_retry(cli_ctx, delay=3):
             time.sleep(delay + delay * i)
     else:
         return False
-    hook.add(message='CAPI components are running', value=1.0, total_val=1.0)
-    logger.info('CAPI components are running')
+    msg = "CAPI components are running"
+    hook.add(message=msg, value=1.0, total_val=1.0)
+    logger.info(msg)
     return True
 
 
