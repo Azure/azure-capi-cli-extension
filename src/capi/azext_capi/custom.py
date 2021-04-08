@@ -273,7 +273,7 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         raise UnclassifiedUserFault(err)
 
     # write the kubeconfig for the workload cluster to a file
-    # TODO: retry this operation several times, then give up and just print the command
+    # Retry this operation several times, then give up and just print the command
     delay = 10
     hook = cmd.cli_ctx.get_progress_controller(True)
     msg = "Waiting for kubeconfig to become available "

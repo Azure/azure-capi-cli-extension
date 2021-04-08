@@ -11,6 +11,7 @@ This module contains JMESPath queries to format output for the az capi extension
 CLUSTER_TABLE_FORMAT = """\
 {
     name: metadata.name,
+    phase: status.phase,
     created: metadata.creationTimestamp,
     namespace: metadata.namespace
 }
@@ -19,6 +20,7 @@ CLUSTER_TABLE_FORMAT = """\
 CLUSTERS_LIST_TABLE_FORMAT = """\
 items[].{
     name: metadata.name,
+    phase: status.phase,
     created: metadata.creationTimestamp,
     namespace: metadata.namespace
 }
