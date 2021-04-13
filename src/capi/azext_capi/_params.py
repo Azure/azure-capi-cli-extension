@@ -13,6 +13,10 @@ import platform
 
 from knack.arguments import CLIArgumentType
 
+from ._completers import get_kubernetes_version_completion_list
+from ._completers import get_vm_size_completion_list
+from ._completers import get_workflow_clusters_completion_list
+
 
 def load_arguments(self, _):
     """Loads command arguments into the parser."""
@@ -21,8 +25,18 @@ def load_arguments(self, _):
         options_list='--capi-name-name', help='Name of the CAPI Kubernetes cluster.')
 
     with self.argument_context('capi') as ctx:
-        ctx.argument('capi_name', capi_name_type, options_list=['--name', '-n'])
-        ctx.argument('yes', options_list=['--yes', '-y'])
+        ctx.argument('capi_name', capi_name_type, options_list=['--name', '-n'],
+                     completer=get_workflow_clusters_completion_list)
+        ctx.argument('control_plane_machine_type', completer=get_vm_size_completion_list)
+        ctx.argument('ephemeral_disks', options_list=['--ephemeral_disks', '-e'])
+        ctx.argument('kubernetes_version', options_list=['--kubernetes-version', '-k'],
+                     completer=get_kubernetes_version_completion_list)
+        ctx.argument('machinepool', options_list=['--machinepool', '-m'])
+        ctx.argument('node_machine_type', completer=get_vm_size_completion_list)
+        ctx.argument('output_path', options_list=['--output-path', '-p'])
+        ctx.argument('vnet_name', options_list=['--vnet-name', '-v'])
+        ctx.argument('windows', options_list=['--windows', '-w'])
+        ctx.argument('yes', options_list=['--yes', '-y'], help="Do not prompt for confirmation")
 
 
 def get_virtualenv():

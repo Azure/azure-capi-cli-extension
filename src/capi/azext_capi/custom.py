@@ -212,13 +212,14 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
             "AZURE_CONTROL_PLANE_MACHINE_COUNT", 3),
         node_machine_type=os.environ.get("AZURE_NODE_MACHINE_TYPE"),
         node_machine_count=os.environ.get("AZURE_NODE_MACHINE_COUNT", 3),
-        kubernetes_version=os.environ.get("AZURE_KUBERNETES_VERSION", "1.20.2"),
+        kubernetes_version=os.environ.get("AZURE_KUBERNETES_VERSION", "1.20.5"),
         subscription_id=os.environ.get("AZURE_SUBSCRIPTION_ID"),
         ssh_public_key=os.environ.get("AZURE_SSH_PUBLIC_KEY_B64", ""),
         vnet_name=None,
         machinepool=False,
         ephemeral_disks=False,
         windows=False,
+        output_path=None,
         yes=False):
     # Generate the cluster configuration
     env = Environment(loader=PackageLoader(__name__, "templates"), auto_reload=False)
