@@ -201,7 +201,8 @@ def update_management_cluster(cmd):
         raise UnclassifiedUserFault(err)
 
 
-def create_workload_cluster(  # pylint: disable=unused-argument,too-many-arguments,too-many-locals
+# pylint: disable=inconsistent-return-statements
+def create_workload_cluster(  # pylint: disable=unused-argument,too-many-arguments,too-many-locals,too-many-statements
         cmd,
         resource_group_name,
         capi_name,
@@ -270,6 +271,7 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
             logger.info("%s returned:\n%s", " ".join(command), output)
             break
         except subprocess.CalledProcessError as err:
+            logger.info(err)
             time.sleep(delay + delay * i)
     else:
         msg = "Couldn't apply workload cluster manifest after waiting 5 minutes."
@@ -318,6 +320,7 @@ When the cluster is ready, run this command to fetch the kubeconfig:
     hook = cmd.cli_ctx.get_progress_controller(True)
     msg = "Installing CNI with VXLAN "
     hook.add(message=msg, value=0, total_val=1.0)
+    # pylint: disable=line-too-long
     calico_manifest = "https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/master/templates/addons/calico.yaml"
     command = ["kubectl", "apply", "-f", calico_manifest, "--kubeconfig", workload_cfg]
     for i in range(60):
@@ -362,13 +365,8 @@ def wait_for_ready(kubeconfig):
         except subprocess.CalledProcessError as err:
             logger.info(err)
             time.sleep(5)
-        except Exception as err:
-            logger.warning(err)
-            logger.warning(type(err))
-            raise
-    else:
-        msg = "Not all cluster nodes are Ready after 5 minutes."
-        raise ResourceNotFoundError(msg)
+    msg = "Not all cluster nodes are Ready after 5 minutes."
+    raise ResourceNotFoundError(msg)
 
 
 def get_kubeconfig(capi_name):
@@ -394,7 +392,7 @@ def delete_workload_cluster(cmd, capi_name):
         raise UnclassifiedUserFault(err)
 
 
-def list_workload_clusters(cmd):
+def list_workload_clusters(cmd):  # pylint: disable=unused-argument
     exit_if_no_management_cluster()
     command = ["kubectl", "get", "clusters", "-o", "json"]
     try:
