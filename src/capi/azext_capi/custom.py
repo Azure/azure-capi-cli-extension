@@ -272,7 +272,7 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         except subprocess.CalledProcessError as err:
             time.sleep(delay + delay * i)
     else:
-        msg = "Couldn't apply workload cluster manifestafter waiting 5 minutes."
+        msg = "Couldn't apply workload cluster manifest after waiting 5 minutes."
         raise ResourceNotFoundError(msg)
     status = "Applied the workload cluster manifest "
     hook.add(message=status, value=1.0, total_val=1.0)
