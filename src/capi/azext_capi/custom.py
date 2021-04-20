@@ -201,7 +201,8 @@ def update_management_cluster(cmd):
         raise UnclassifiedUserFault(err)
 
 
-def create_workload_cluster(  # pylint: disable=unused-argument,too-many-arguments,too-many-locals
+# pylint: disable=inconsistent-return-statements
+def create_workload_cluster(  # pylint: disable=unused-argument,too-many-arguments,too-many-locals,too-many-statements
         cmd,
         resource_group_name,
         capi_name,
@@ -257,12 +258,26 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
     find_management_cluster_retry(cmd.cli_ctx)
 
     # Apply the cluster configuration
+    delay = 5
+    hook = cmd.cli_ctx.get_progress_controller(True)
+    msg = "Applying the workload cluster manifest "
+    hook.add(message=msg, value=0, total_val=1.0)
+    logger.info(msg)
     command = ["kubectl", "apply", "-f", filename]
-    try:
-        output = subprocess.check_output(command, universal_newlines=True)
-        logger.info("%s returned:\n%s", " ".join(command), output)
-    except subprocess.CalledProcessError as err:
-        raise UnclassifiedUserFault(err)
+    for i in range(60):
+        hook.add(message=msg, value=0.1 * i, total_val=1.0)
+        try:
+            output = subprocess.check_output(command, universal_newlines=True)
+            logger.info("%s returned:\n%s", " ".join(command), output)
+            break
+        except subprocess.CalledProcessError as err:
+            logger.info(err)
+            time.sleep(delay + delay * i)
+    else:
+        msg = "Couldn't apply workload cluster manifest after waiting 5 minutes."
+        raise ResourceNotFoundError(msg)
+    status = "Applied the workload cluster manifest "
+    hook.add(message=status, value=1.0, total_val=1.0)
 
     # show the cluster's initialization progress
     # TODO: should we loop on this command with `watch`?
@@ -275,12 +290,12 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
 
     # write the kubeconfig for the workload cluster to a file
     # Retry this operation several times, then give up and just print the command
-    delay = 10
+    delay = 5
     hook = cmd.cli_ctx.get_progress_controller(True)
     msg = "Waiting for kubeconfig to become available "
     hook.add(message=msg, value=0, total_val=1.0)
     logger.info(msg)
-    for i in range(0, 30):
+    for i in range(60):
         hook.add(message=msg, value=0.1 * i, total_val=1.0)
         try:
             status = get_kubeconfig(capi_name)
@@ -296,11 +311,68 @@ When the cluster is ready, run this command to fetch the kubeconfig:
         raise ResourceNotFoundError(msg)
     hook.add(message=status, value=1.0, total_val=1.0)
 
+    workload_cfg = capi_name + ".kubeconfig"
+
+    # Wait for an apiserver to be available
+
+    # Install CNI
+    delay = 5
+    hook = cmd.cli_ctx.get_progress_controller(True)
+    msg = "Installing CNI with VXLAN "
+    hook.add(message=msg, value=0, total_val=1.0)
+    # pylint: disable=line-too-long
+    calico_manifest = "https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/master/templates/addons/calico.yaml"
+    command = ["kubectl", "apply", "-f", calico_manifest, "--kubeconfig", workload_cfg]
+    for i in range(60):
+        hook.add(message=msg, value=0.1 * i, total_val=1.0)
+        try:
+            subprocess.run(command, check=True)
+            break
+        except subprocess.CalledProcessError as err:
+            logger.info(err)
+            time.sleep(delay + delay * i)
+    else:
+        msg = "Couldn't install CNI after waiting 5 minutes."
+        raise ResourceNotFoundError(msg)
+    hook.add(message=status, value=1.0, total_val=1.0)
+
+    # Wait for all nodes to be ready before returning
+    wait_for_ready(workload_cfg)
+    return show_workload_cluster(cmd, capi_name)
+
+
+def find_nodes(kubeconfig):
+    command = ["kubectl", "get", "nodes", "--output", "name", "--kubeconfig", kubeconfig]
+    try:
+        output = subprocess.check_output(command, universal_newlines=True)
+        logger.info("%s returned:\n%s", " ".join(command), output)
+        return output.splitlines()
+    except subprocess.CalledProcessError as err:
+        raise UnclassifiedUserFault(err)
+
+
+def wait_for_ready(kubeconfig):
+    base_command = ["kubectl", "wait", "--for", "condition=Ready", "--kubeconfig", kubeconfig, "--timeout", "10s"]
+    timeout = 60 * 5
+
+    start = time.time()
+    while time.time() < start + timeout:
+        command = base_command + find_nodes(kubeconfig)
+        try:
+            output = subprocess.check_output(command, universal_newlines=True)
+            logger.info("%s returned:\n%s", " ".join(command), output)
+            return
+        except subprocess.CalledProcessError as err:
+            logger.info(err)
+            time.sleep(5)
+    msg = "Not all cluster nodes are Ready after 5 minutes."
+    raise ResourceNotFoundError(msg)
+
 
 def get_kubeconfig(capi_name):
     cmd = ["clusterctl", "get", "kubeconfig", capi_name]
     try:
-        output = subprocess.check_output(cmd, universal_newlines=True, stderr=subprocess.STDOUT)
+        output = subprocess.check_output(cmd, universal_newlines=True)
     except subprocess.CalledProcessError as err:
         raise UnclassifiedUserFault(err)
     filename = capi_name + ".kubeconfig"
@@ -320,12 +392,12 @@ def delete_workload_cluster(cmd, capi_name):
         raise UnclassifiedUserFault(err)
 
 
-def list_workload_clusters(cmd):
+def list_workload_clusters(cmd):  # pylint: disable=unused-argument
     exit_if_no_management_cluster()
-    cmd = ["kubectl", "get", "clusters", "-o", "json"]
+    command = ["kubectl", "get", "clusters", "-o", "json"]
     try:
-        output = subprocess.check_output(cmd, universal_newlines=True)
-        logger.info("%s returned:\n%s", " ".join(cmd), output)
+        output = subprocess.check_output(command, universal_newlines=True)
+        logger.info("%s returned:\n%s", " ".join(command), output)
     except subprocess.CalledProcessError as err:
         raise UnclassifiedUserFault(err)
     return json.loads(output)
@@ -333,8 +405,7 @@ def list_workload_clusters(cmd):
 
 def show_workload_cluster(cmd, capi_name):  # pylint: disable=unused-argument
     exit_if_no_management_cluster()
-    # TODO: --output=table should print the output of `clusterctl describe` directly.
-    # command = ["clusterctl", "describe", "cluster", name]
+    # TODO: --output=table could print the output of `clusterctl describe` directly.
     command = ["kubectl", "get", "cluster", capi_name, "--output", "json"]
     try:
         output = subprocess.check_output(command, stderr=subprocess.STDOUT, universal_newlines=True)

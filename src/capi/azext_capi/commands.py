@@ -16,7 +16,8 @@ def load_command_table(self, _):
     """Loads CAPI commands into the parser."""
 
     with self.command_group('capi', is_preview=True) as g:
-        g.custom_command('create', 'create_workload_cluster')
+        g.custom_command('create', 'create_workload_cluster',
+                         table_transformer=CLUSTER_TABLE_FORMAT)
         g.custom_command('delete', 'delete_workload_cluster')
         g.custom_command('list', 'list_workload_clusters',
                          table_transformer=CLUSTERS_LIST_TABLE_FORMAT)
