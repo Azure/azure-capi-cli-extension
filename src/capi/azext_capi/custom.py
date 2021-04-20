@@ -124,8 +124,12 @@ def create_management_cluster(cmd):
         raise UnclassifiedUserFault("Can't locate a Kubernetes cluster") from err
 
 
-def delete_management_cluster(cmd):  # pylint: disable=unused-argument
-    # TODO: add user confirmation
+def delete_management_cluster(cmd, yes=False):  # pylint: disable=unused-argument
+    exit_if_no_management_cluster()
+    msg = 'Do you want to delete CAPZ management components from the current cluster?'
+    if not yes and not prompt_y_n(msg, default="n"):
+        return
+
     command = ["clusterctl", "delete", "--all",
                "--include-crd", "--include-namespace"]
     try:
@@ -181,11 +185,14 @@ def show_management_cluster(_cmd, yes=False):
     # TODO: echo details of the management cluster in all output formats
 
 
-def update_management_cluster(cmd):
+def update_management_cluster(cmd, yes=False):
     exit_if_no_management_cluster()
+    msg = 'Do you want to update CAPZ management components on the current cluster?'
+    if not yes and not prompt_y_n(msg, default="n"):
+        return
     # Check for local prerequisites
     check_preqreqs(cmd)
-    cmd = [
+    command = [
         "clusterctl",
         "upgrade",
         "apply",
@@ -195,8 +202,8 @@ def update_management_cluster(cmd):
         "v1alpha3",
     ]
     try:
-        output = subprocess.check_output(cmd, universal_newlines=True)
-        logger.info("%s returned:\n%s", " ".join(cmd), output)
+        output = subprocess.check_output(command, universal_newlines=True)
+        logger.info("%s returned:\n%s", " ".join(command), output)
     except subprocess.CalledProcessError as err:
         raise UnclassifiedUserFault(err)
 
@@ -381,9 +388,11 @@ def get_kubeconfig(capi_name):
     return "Wrote kubeconfig file to {} ".format(filename)
 
 
-def delete_workload_cluster(cmd, capi_name):
-    # TODO: add user confirmation
+def delete_workload_cluster(cmd, capi_name, yes=False):
     exit_if_no_management_cluster()
+    msg = 'Do you want to delete this Kubernetes cluster "{}"?'.format(capi_name)
+    if not yes and not prompt_y_n(msg, default="n"):
+        return
     cmd = ["kubectl", "delete", "cluster", capi_name]
     try:
         output = subprocess.check_output(cmd, universal_newlines=True)

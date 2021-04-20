@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 
 from azure_devtools.scenario_tests import AllowLargeResponse
 from azure.cli.testsdk import (ScenarioTest, ResourceGroupPreparer)
+from knack.prompting import NoTTYException
 
 
 TEST_DIR = os.path.abspath(os.path.join(os.path.abspath(__file__), '..'))
@@ -50,6 +51,49 @@ class CapiScenarioTest(ScenarioTest):
             self.assertEqual(count, 5)  # "apiVersion", "kind", "metadata", "spec", and "status"
 
             self.assertEqual(mock.call_count, 2)
+
+    @patch('azext_capi.custom.exit_if_no_management_cluster')
+    def test_capi_delete(self, mock_def):
+        # Test (indirectly) that user is prompted for confirmation by default
+        with self.assertRaises(NoTTYException):
+            self.cmd('capi delete --name testcluster1')
+
+        # Test that --yes skips confirmation and the cluster is deleted
+        with patch('subprocess.check_output') as mock:
+            self.cmd("capi delete --name testcluster1 --yes", checks=[
+                self.is_empty(),
+            ])
+            self.assertTrue(mock.called)
+            self.assertEqual(mock.call_args.args[0], ["kubectl", "delete", "cluster", "testcluster1"])
+
+    @patch('azext_capi.custom.exit_if_no_management_cluster')
+    def test_capi_management_delete(self, mock_def):
+        # Test (indirectly) that user is prompted for confirmation by default
+        with self.assertRaises(NoTTYException):
+            self.cmd('capi management delete')
+
+        # Test that --yes skips confirmation and the management cluster components are deleted
+        with patch('subprocess.check_output') as mock:
+            self.cmd("capi management delete -y", checks=[
+                self.is_empty(),
+            ])
+            self.assertEqual(mock.call_count, 2)
+            self.assertEqual(mock.call_args_list[0].args[0], ["clusterctl", "delete", "--all", "--include-crd", "--include-namespace"])
+            self.assertEqual(mock.call_args_list[1].args[0][:4], ["kubectl", "delete", "namespace", "--ignore-not-found"])
+
+    @patch('azext_capi.custom.exit_if_no_management_cluster')
+    def test_capi_management_update(self, mock_def):
+        # Test (indirectly) that user is prompted for confirmation by default
+        with self.assertRaises(NoTTYException):
+            self.cmd('capi management update')
+
+        # Test that --yes skips confirmation and the cluster is updated
+        with patch('subprocess.check_output') as mock:
+            self.cmd("capi management update --yes", checks=[
+                self.is_empty(),
+            ])
+            self.assertEqual(mock.call_count, 1)
+            self.assertEqual(mock.call_args_list[0].args[0][:3], ["clusterctl", "upgrade", "apply"])
 
 
 AZ_CAPI_LIST_JSON = """\
