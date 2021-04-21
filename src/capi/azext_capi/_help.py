@@ -37,6 +37,11 @@ parameters:
     short-summary: Version of Kubernetes to use
     populator-commands:
       - "`az vm image list -p cncf-upstream -f capi --all`"
+  - name: --location -l
+    type: string
+    long-summary: |
+        If not specified, the location of the --resource-group will be used.
+        Required if --resource-group is not specified or does not yet exist
   - name: --machinepool
     type: bool
     short-summary: Use experimental MachinePools instead of MachineSets
@@ -47,6 +52,10 @@ parameters:
   - name: --output-path -p
     type: string
     short-summary: Where to save helper commands when they are downloaded
+  - name: --resource-group -g
+    type: string
+    long-summary: |
+        If not specified, the value of --name will be used
   - name: --vnet-name
     type: string
     short-summary: Name of the Virtual Network to create

@@ -5,17 +5,43 @@
 
 import os
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from azure_devtools.scenario_tests import AllowLargeResponse
+from azure.cli.core.azclierror import InvalidArgumentValueError
+from azure.cli.core.azclierror import RequiredArgumentMissingError
 from azure.cli.testsdk import (ScenarioTest, ResourceGroupPreparer)
 from knack.prompting import NoTTYException
+from msrestazure.azure_exceptions import CloudError
 
 
 TEST_DIR = os.path.abspath(os.path.join(os.path.abspath(__file__), '..'))
 
 
 class CapiScenarioTest(ScenarioTest):
+
+    @patch('azext_capi.custom.exit_if_no_management_cluster')
+    def test_capi_create(self, mock_def):
+
+        # Existing RG which doesn't match --location
+        with patch('azext_capi._client_factory.cf_resource_groups') as cf_resource_groups:
+            with self.assertRaises(InvalidArgumentValueError):
+                self.cmd('capi create -n myCluster -g existingRG --location bogusLocation')
+        # New RG, but no --location specified
+        with patch('azext_capi._client_factory.cf_resource_groups') as cf_resource_groups:
+            mock_client = MagicMock()
+            mock_client.get.side_effect = CloudError(Mock(response_status=404), "Resource group 'myRG' could not be found.")
+            cf_resource_groups.return_value = mock_client
+            with self.assertRaises(RequiredArgumentMissingError):
+                self.cmd('capi create -n myCluster -g myRG')
+        # New RG, --location specified but no --resource-group name
+        with patch('azext_capi._client_factory.cf_resource_groups') as cf_resource_groups:
+            mock_client = MagicMock()
+            mock_client.get.side_effect = CloudError(Mock(response_status=404), "Resource group 'myCluster' could not be found")
+            cf_resource_groups.return_value = mock_client
+            # If we got to user confirmation, RG validation succeeded
+            with self.assertRaises(NoTTYException):
+                self.cmd('capi create -n myCluster -l southcentralus')
 
     @patch('azext_capi.custom.exit_if_no_management_cluster')
     def test_capi_list(self, mock_def):
