@@ -41,7 +41,7 @@ logger = get_logger(__name__)  # pylint: disable=invalid-name
 
 
 def init_environment(cmd, prompt=True):
-    check_preqreqs(cmd, install=True)
+    check_prereqs(cmd, install=True)
     # Create a management cluster if needed
     try:
         find_management_cluster_retry(cmd.cli_ctx)
@@ -114,7 +114,7 @@ def _install_capz_components():
 
 def create_management_cluster(cmd):
     # TODO: add user confirmation
-    check_preqreqs(cmd)
+    check_prereqs(cmd)
 
     command = ["clusterctl", "init", "--infrastructure", "azure"]
     try:
@@ -190,8 +190,8 @@ def update_management_cluster(cmd, yes=False):
     msg = 'Do you want to update CAPZ management components on the current cluster?'
     if not yes and not prompt_y_n(msg, default="n"):
         return
-    # Check for local prerequisites
-    check_preqreqs(cmd)
+    # Check for clusterctl tool
+    check_prereqs(cmd, install=yes)
     command = [
         "clusterctl",
         "upgrade",
@@ -428,19 +428,27 @@ def update_workload_cluster(cmd, capi_name):
     raise NotImplementedError
 
 
-def check_preqreqs(cmd, install=False):
+def check_prereqs(cmd, install=False):
     # Install kubectl
     if not which("kubectl") and install:
         install_kubectl(cmd)
 
     # Install clusterctl
-    if not which("clusterctl") and install:
-        install_clusterctl(cmd)
+    if not which("kubectl") and install:
+        install_kubectl(cmd)
+    # check_clusterctl(cmd, install)
 
     # Check for required environment variables
     # TODO: remove this when AAD Pod Identity becomes the default
     for var in ["AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_SUBSCRIPTION_ID", "AZURE_TENANT_ID"]:
         check_environment_var(var)
+
+
+def check_clusterctl(cmd, install=False):
+    if not which("clusterctl"):
+        logger.warn("clusterctl was not found.")
+        if install or prompt_y_n("Download and install clusterctl?", default="n"):
+            install_clusterctl(cmd)
 
 
 def check_environment_var(var):

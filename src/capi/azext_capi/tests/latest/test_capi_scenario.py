@@ -60,11 +60,12 @@ class CapiScenarioTest(ScenarioTest):
 
         # Test that --yes skips confirmation and the cluster is deleted
         with patch('subprocess.check_output') as mock:
-            self.cmd("capi delete --name testcluster1 --yes", checks=[
-                self.is_empty(),
-            ])
-            self.assertTrue(mock.called)
-            self.assertEqual(mock.call_args.args[0], ["kubectl", "delete", "cluster", "testcluster1"])
+            with patch('azext_capi.custom.check_prereqs'):
+              self.cmd("capi delete --name testcluster1 --yes", checks=[
+                  self.is_empty(),
+              ])
+              self.assertTrue(mock.called)
+              self.assertEqual(mock.call_args[0][0], ["kubectl", "delete", "cluster", "testcluster1"])
 
     @patch('azext_capi.custom.exit_if_no_management_cluster')
     def test_capi_management_delete(self, mock_def):
@@ -78,8 +79,8 @@ class CapiScenarioTest(ScenarioTest):
                 self.is_empty(),
             ])
             self.assertEqual(mock.call_count, 2)
-            self.assertEqual(mock.call_args_list[0].args[0], ["clusterctl", "delete", "--all", "--include-crd", "--include-namespace"])
-            self.assertEqual(mock.call_args_list[1].args[0][:4], ["kubectl", "delete", "namespace", "--ignore-not-found"])
+            self.assertEqual(mock.call_args_list[0][0][0], ["clusterctl", "delete", "--all", "--include-crd", "--include-namespace"])
+            self.assertEqual(mock.call_args_list[1][0][0][:4], ["kubectl", "delete", "namespace", "--ignore-not-found"])
 
     @patch('azext_capi.custom.exit_if_no_management_cluster')
     def test_capi_management_update(self, mock_def):
@@ -93,7 +94,7 @@ class CapiScenarioTest(ScenarioTest):
                 self.is_empty(),
             ])
             self.assertEqual(mock.call_count, 1)
-            self.assertEqual(mock.call_args_list[0].args[0][:3], ["clusterctl", "upgrade", "apply"])
+            self.assertEqual(mock.call_args_list[0][0][0][:3], ["clusterctl", "upgrade", "apply"])
 
 
 AZ_CAPI_LIST_JSON = """\
