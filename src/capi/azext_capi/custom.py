@@ -446,7 +446,7 @@ def check_prereqs(cmd, install=False):
 
 def check_clusterctl(cmd, install=False):
     if not which("clusterctl"):
-        logger.warn("clusterctl was not found.")
+        logger.warning("clusterctl was not found.")
         if install or prompt_y_n("Download and install clusterctl?", default="n"):
             install_clusterctl(cmd)
 
