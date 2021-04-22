@@ -22,30 +22,34 @@ class CapiScenarioTest(ScenarioTest):
 
     @patch('azext_capi.custom.exit_if_no_management_cluster')
     def test_capi_create(self, mock_def):
-
+        # Test that error is raised if no args are passed
+        with self.assertRaises(SystemExit):
+            self.cmd('capi create')
+        # Test that --name is the only required arg if it already exists
+        with patch('azext_capi._client_factory.cf_resource_groups') as cf_resource_groups:
+            # If we got to user confirmation (NoTTYException), RG validation succeeded
+            with self.assertRaises(NoTTYException):
+                self.cmd('capi create -n myCluster')
         # Existing RG which doesn't match --location
         with patch('azext_capi._client_factory.cf_resource_groups') as cf_resource_groups:
             with self.assertRaises(InvalidArgumentValueError):
                 self.cmd('capi create -n myCluster -g existingRG --location bogusLocation')
+        mock_client = MagicMock()
+        mock_client.get.side_effect = CloudError(Mock(response_status=404), "Resource group 'myCluster' could not be found.")
         # New RG, but no --location specified
         with patch('azext_capi._client_factory.cf_resource_groups') as cf_resource_groups:
-            mock_client = MagicMock()
-            mock_client.get.side_effect = CloudError(Mock(response_status=404), "Resource group 'myRG' could not be found.")
             cf_resource_groups.return_value = mock_client
             with self.assertRaises(RequiredArgumentMissingError):
-                self.cmd('capi create -n myCluster -g myRG')
+                self.cmd('capi create -n myClusterName -g myCluster')
         # New RG, --location specified but no --resource-group name
         with patch('azext_capi._client_factory.cf_resource_groups') as cf_resource_groups:
-            mock_client = MagicMock()
-            mock_client.get.side_effect = CloudError(Mock(response_status=404), "Resource group 'myCluster' could not be found")
             cf_resource_groups.return_value = mock_client
-            # If we got to user confirmation, RG validation succeeded
+            # If we got to user confirmation (NoTTYException), RG validation succeeded
             with self.assertRaises(NoTTYException):
                 self.cmd('capi create -n myCluster -l southcentralus')
 
     @patch('azext_capi.custom.exit_if_no_management_cluster')
     def test_capi_list(self, mock_def):
-
         with patch('subprocess.check_output') as mock:
             mock.return_value = AZ_CAPI_LIST_JSON
             self.cmd('capi list --output json', checks=[
