@@ -31,6 +31,7 @@ from azure.cli.core.azclierror import ResourceNotFoundError
 from azure.cli.core.azclierror import UnclassifiedUserFault
 from azure.cli.core.azclierror import ValidationError
 from azure.cli.core.api import get_config_dir
+from msrestazure.azure_exceptions import CloudError
 
 from ._helpers import ssl_context, urlretrieve
 
@@ -211,8 +212,8 @@ def update_management_cluster(cmd, yes=False):
 # pylint: disable=inconsistent-return-statements
 def create_workload_cluster(  # pylint: disable=unused-argument,too-many-arguments,too-many-locals,too-many-statements
         cmd,
-        resource_group_name,
         capi_name,
+        resource_group_name=None,
         location=None,
         control_plane_machine_type=os.environ.get(
             "AZURE_CONTROL_PLANE_MACHINE_TYPE"),
@@ -253,6 +254,27 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
     with open(filename, "w") as manifest_file:
         manifest_file.write(manifest)
     logger.warning("wrote manifest file to %s", filename)
+
+    # Check if the RG already exists and that it's consistent with the location
+    # specified. CAPZ will actually create (and delete) the RG if needed.
+    from ._client_factory import cf_resource_groups
+
+    rg_client = cf_resource_groups(cmd.cli_ctx)
+    if not resource_group_name:
+        resource_group_name = capi_name
+    try:
+        rg = rg_client.get(resource_group_name)
+        if not location:
+            location = rg.location
+        elif location != rg.location:
+            msg = "--location is {}, but the resource group {} already exists in {}."
+            raise InvalidArgumentValueError(msg.format(location, resource_group_name, rg.location))
+    except CloudError as err:
+        if 'could not be found' not in err.message:
+            raise
+        if not location:
+            msg = "--location is required to create the resource group {}."
+            raise RequiredArgumentMissingError(msg.format(resource_group_name))
 
     msg = 'Do you want to create this Kubernetes cluster "{}" in the Azure resource group "{}"?'.format(
         capi_name, resource_group_name)
