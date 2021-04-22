@@ -34,7 +34,7 @@ def load_arguments(self, _):
         ctx.argument('machinepool', options_list=['--machinepool', '-m'])
         ctx.argument('node_machine_type', completer=get_vm_size_completion_list)
         ctx.argument('output_path', options_list=['--output-path', '-p'])
-        ctx.argument('vnet_name', options_list=['--vnet-name', '-v'])
+        ctx.argument('vnet_name', options_list=['--vnet-name'])
         ctx.argument('windows', options_list=['--windows', '-w'])
         ctx.argument('yes', options_list=['--yes', '-y'], help="Do not prompt for confirmation")
 
