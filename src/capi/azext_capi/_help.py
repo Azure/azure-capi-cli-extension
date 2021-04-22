@@ -47,7 +47,7 @@ parameters:
   - name: --output-path -p
     type: string
     short-summary: Where to save helper commands when they are downloaded
-  - name: --vnet-name -v
+  - name: --vnet-name
     type: string
     short-summary: Name of the Virtual Network to create
   - name: --windows -w
