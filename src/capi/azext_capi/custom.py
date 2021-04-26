@@ -451,19 +451,20 @@ def update_workload_cluster(cmd, capi_name):
 
 
 def check_prereqs(cmd, install=False):
-    # Install kubectl
-    if not which("kubectl") and install:
-        install_kubectl(cmd)
-
-    # Install clusterctl
-    if not which("kubectl") and install:
-        install_kubectl(cmd)
-    # check_clusterctl(cmd, install)
+    check_kubectl(cmd, install)
+    check_clusterctl(cmd, install)
 
     # Check for required environment variables
     # TODO: remove this when AAD Pod Identity becomes the default
     for var in ["AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_SUBSCRIPTION_ID", "AZURE_TENANT_ID"]:
         check_environment_var(var)
+
+
+def check_kubectl(cmd, install=False):
+    if not which("kubectl"):
+        logger.warning("kubectl was not found.")
+        if install or prompt_y_n("Download and install kubectl?", default="n"):
+            install_kubectl(cmd)
 
 
 def check_clusterctl(cmd, install=False):
