@@ -9,6 +9,8 @@ This module contains functions to help with command-line prompting via the [TAB]
 
 from azure.cli.core.decorators import Completer
 
+# pylint: disable=import-outside-toplevel
+
 
 @Completer
 def get_kubernetes_version_completion_list(cmd, prefix, namespace, **kwargs):  # pylint: disable=unused-argument
@@ -65,11 +67,13 @@ def _get_location_from_resource_group(cli_ctx, resource_group_name):
     from ._client_factory import cf_resource_groups
     from msrestazure.azure_exceptions import CloudError
 
+    location = None
     try:
         rg = cf_resource_groups(cli_ctx).get(resource_group_name)
-        return rg.location
+        location = rg.location
     except CloudError as err:
         # Print a warning if the user hit [TAB] but the `--resource-group` argument was incorrect.
         # For example: "Warning: Resource group 'bogus' could not be found."
         from argcomplete import warn
         warn('Warning: {}'.format(err.message))
+    return location
