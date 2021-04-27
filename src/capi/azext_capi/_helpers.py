@@ -30,6 +30,6 @@ def ssl_context():
 
 def urlretrieve(url, filename):
     """Retrieves the contents of a URL to a file."""
-    req = urlopen(url, context=ssl_context())
+    req = urlopen(url, context=ssl_context())  # pylint: disable=consider-using-with
     with open(filename, "wb") as out:
         out.write(req.read())

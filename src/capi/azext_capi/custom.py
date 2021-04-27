@@ -80,7 +80,7 @@ Where should we create a management cluster?
                 output = subprocess.check_output(cmd, universal_newlines=True)
                 logger.info("%s returned:\n%s", " ".join(cmd), output)
             except subprocess.CalledProcessError as err:
-                raise UnclassifiedUserFault(err)
+                raise UnclassifiedUserFault from err
         elif choice_index == 1:
             logger.info("AKS management cluster")
             cmd = ["az", "group", "create", "-l",
@@ -89,14 +89,14 @@ Where should we create a management cluster?
                 output = subprocess.check_output(cmd, universal_newlines=True)
                 logger.info("%s returned:\n%s", " ".join(cmd), output)
             except subprocess.CalledProcessError as err:
-                raise UnclassifiedUserFault(err)
+                raise UnclassifiedUserFault from err
             cmd = ["az", "aks", "create", "-g",
                    cluster_name, "--name", cluster_name]
             try:
                 output = subprocess.check_output(cmd, universal_newlines=True)
                 logger.info("%s returned:\n%s", " ".join(cmd), output)
             except subprocess.CalledProcessError as err:
-                raise UnclassifiedUserFault(err)
+                raise UnclassifiedUserFault from err
         else:
             return
         _install_capz_components()
@@ -137,7 +137,7 @@ def delete_management_cluster(cmd, yes=False):  # pylint: disable=unused-argumen
         output = subprocess.check_output(command, universal_newlines=True)
         logger.info("%s returned:\n%s", " ".join(command), output)
     except subprocess.CalledProcessError as err:
-        raise UnclassifiedUserFault(err)
+        raise UnclassifiedUserFault from err
     namespaces = [
         "capi-kubeadm-bootstrap-system",
         "capi-kubeadm-control-plane-system",
@@ -151,7 +151,7 @@ def delete_management_cluster(cmd, yes=False):  # pylint: disable=unused-argumen
         output = subprocess.check_output(command, universal_newlines=True)
         logger.info("%s returned:\n%s", " ".join(command), output)
     except subprocess.CalledProcessError as err:
-        raise UnclassifiedUserFault(err)
+        raise UnclassifiedUserFault from err
 
 
 def move_management_cluster(cmd):
@@ -178,7 +178,7 @@ def show_management_cluster(_cmd, yes=False):
         contexts = output.splitlines()
         logger.info(contexts)
     except subprocess.CalledProcessError as err:
-        raise UnclassifiedUserFault(err)
+        raise UnclassifiedUserFault from err
 
     msg = path + "ok"
     if not yes and prompt_y_n(msg, default="n"):
@@ -206,7 +206,7 @@ def update_management_cluster(cmd, yes=False):
         output = subprocess.check_output(command, universal_newlines=True)
         logger.info("%s returned:\n%s", " ".join(command), output)
     except subprocess.CalledProcessError as err:
-        raise UnclassifiedUserFault(err)
+        raise UnclassifiedUserFault from err
 
 
 # pylint: disable=inconsistent-return-statements
@@ -257,7 +257,7 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
 
     # Check if the RG already exists and that it's consistent with the location
     # specified. CAPZ will actually create (and delete) the RG if needed.
-    from ._client_factory import cf_resource_groups
+    from ._client_factory import cf_resource_groups  # pylint: disable=import-outside-toplevel
 
     rg_client = cf_resource_groups(cmd.cli_ctx)
     if not resource_group_name:
@@ -274,7 +274,7 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
             raise
         if not location:
             msg = "--location is required to create the resource group {}."
-            raise RequiredArgumentMissingError(msg.format(resource_group_name))
+            raise RequiredArgumentMissingError(msg.format(resource_group_name)) from err
 
     msg = 'Do you want to create this Kubernetes cluster "{}" in the Azure resource group "{}"?'.format(
         capi_name, resource_group_name)
@@ -315,7 +315,7 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
     try:
         subprocess.run(command, check=True)
     except subprocess.CalledProcessError as err:
-        raise UnclassifiedUserFault(err)
+        raise UnclassifiedUserFault from err
 
     # write the kubeconfig for the workload cluster to a file
     # Retry this operation several times, then give up and just print the command
@@ -377,7 +377,7 @@ def find_nodes(kubeconfig):
         logger.info("%s returned:\n%s", " ".join(command), output)
         return output.splitlines()
     except subprocess.CalledProcessError as err:
-        raise UnclassifiedUserFault(err)
+        raise UnclassifiedUserFault from err
 
 
 def wait_for_ready(kubeconfig):
@@ -403,7 +403,7 @@ def get_kubeconfig(capi_name):
     try:
         output = subprocess.check_output(cmd, universal_newlines=True)
     except subprocess.CalledProcessError as err:
-        raise UnclassifiedUserFault(err)
+        raise UnclassifiedUserFault from err
     filename = capi_name + ".kubeconfig"
     with open(filename, "w") as kubeconfig_file:
         kubeconfig_file.write(output)
@@ -420,7 +420,7 @@ def delete_workload_cluster(cmd, capi_name, yes=False):
         output = subprocess.check_output(cmd, universal_newlines=True)
         logger.info("%s returned:\n%s", " ".join(cmd), output)
     except subprocess.CalledProcessError as err:
-        raise UnclassifiedUserFault(err)
+        raise UnclassifiedUserFault from err
 
 
 def list_workload_clusters(cmd):  # pylint: disable=unused-argument
@@ -430,7 +430,7 @@ def list_workload_clusters(cmd):  # pylint: disable=unused-argument
         output = subprocess.check_output(command, universal_newlines=True)
         logger.info("%s returned:\n%s", " ".join(command), output)
     except subprocess.CalledProcessError as err:
-        raise UnclassifiedUserFault(err)
+        raise UnclassifiedUserFault from err
     return json.loads(output)
 
 
@@ -442,7 +442,7 @@ def show_workload_cluster(cmd, capi_name):  # pylint: disable=unused-argument
         output = subprocess.check_output(command, stderr=subprocess.STDOUT, universal_newlines=True)
         logger.info("%s returned:\n%s", " ".join(command), output)
     except subprocess.CalledProcessError as err:
-        raise UnclassifiedUserFault(err)
+        raise UnclassifiedUserFault from err
     return json.loads(output)
 
 
@@ -451,19 +451,20 @@ def update_workload_cluster(cmd, capi_name):
 
 
 def check_prereqs(cmd, install=False):
-    # Install kubectl
-    if not which("kubectl") and install:
-        install_kubectl(cmd)
-
-    # Install clusterctl
-    if not which("kubectl") and install:
-        install_kubectl(cmd)
-    # check_clusterctl(cmd, install)
+    check_kubectl(cmd, install)
+    check_clusterctl(cmd, install)
 
     # Check for required environment variables
     # TODO: remove this when AAD Pod Identity becomes the default
     for var in ["AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_SUBSCRIPTION_ID", "AZURE_TENANT_ID"]:
         check_environment_var(var)
+
+
+def check_kubectl(cmd, install=False):
+    if not which("kubectl"):
+        logger.warning("kubectl was not found.")
+        if install or prompt_y_n("Download and install kubectl?", default="n"):
+            install_kubectl(cmd)
 
 
 def check_clusterctl(cmd, install=False):
@@ -482,7 +483,7 @@ def check_environment_var(var):
         try:
             val = os.environ[var]
         except KeyError as err:
-            raise RequiredArgumentMissingError("Required environment variable {} was not found.".format(err))
+            raise RequiredArgumentMissingError("Required environment variable {} was not found.".format(err)) from err
         # Set the base64-encoded variable as a convenience
         val = base64.b64encode(val.encode("utf-8")).decode("ascii")
         os.environ[var_b64] = val
@@ -601,7 +602,7 @@ def install_clusterctl(_cmd, client_version="latest", install_location=None, sou
         os.chmod(install_location, perms)
     except IOError as ex:
         err_msg = "Connection error while attempting to download client ({})".format(ex)
-        raise FileOperationError(err_msg)
+        raise FileOperationError(err_msg) from ex
 
     logger.warning(
         "Please ensure that %s is in your search PATH, so the `%s` command can be found.",
@@ -647,10 +648,7 @@ def install_kind(_cmd, client_version="v0.10.0", install_location=None, source_u
             os.stat(install_location).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
         )
     except IOError as ex:
-        raise FileOperationError(
-            "Connection error while attempting to download client ({})".format(
-                ex)
-        )
+        raise FileOperationError("Connection error while attempting to download client") from ex
 
     if system == "Windows":
         # be verbose, as the install_location likely not in Windows's search PATHs

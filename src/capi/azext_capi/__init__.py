@@ -9,6 +9,8 @@ from azure.cli.core import AzCommandsLoader
 
 from azext_capi._help import helps  # pylint: disable=unused-import
 
+# pylint: disable=import-outside-toplevel
+
 
 class CapiCommandsLoader(AzCommandsLoader):
     """CapiCommandsLoader is responsible for loading the `az capi` commands and
@@ -19,9 +21,7 @@ class CapiCommandsLoader(AzCommandsLoader):
         from azure.cli.core.commands import CliCommandType
 
         capi_custom = CliCommandType(operations_tmpl="azext_capi.custom#{}")
-        super(CapiCommandsLoader, self).__init__(
-            cli_ctx=cli_ctx, custom_command_type=capi_custom
-        )
+        super().__init__(cli_ctx=cli_ctx, custom_command_type=capi_custom)
 
     def load_command_table(self, args):
         from azext_capi.commands import load_command_table
