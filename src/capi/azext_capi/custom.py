@@ -9,50 +9,54 @@
 
 import base64
 import json
+import logging
 import os
 import platform
-import random
 import re
 import stat
-import string
 import subprocess
 import time
-
-from jinja2 import Environment, PackageLoader
-from knack.log import get_logger
-from knack.prompting import prompt_choice_list, prompt_y_n
-from six.moves.urllib.request import urlopen  # pylint: disable=import-error
+from functools import lru_cache
+from threading import Timer
 
 from azure.cli.core import get_default_cli
+from azure.cli.core.api import get_config_dir
 from azure.cli.core.azclierror import FileOperationError
 from azure.cli.core.azclierror import InvalidArgumentValueError
 from azure.cli.core.azclierror import RequiredArgumentMissingError
 from azure.cli.core.azclierror import ResourceNotFoundError
 from azure.cli.core.azclierror import UnclassifiedUserFault
 from azure.cli.core.azclierror import ValidationError
-from azure.cli.core.api import get_config_dir
+from jinja2 import Environment, PackageLoader
+from knack.log import get_logger
+from knack.prompting import prompt_choice_list, prompt_y_n
 from msrestazure.azure_exceptions import CloudError
+from six.moves.urllib.request import urlopen  # pylint: disable=import-error
 
 from ._helpers import ssl_context, urlretrieve
-
 from ._params import _get_default_install_location
 
 
-logger = get_logger(__name__)  # pylint: disable=invalid-name
+logger = get_logger()  # pylint: disable=invalid-name
+
+
+@lru_cache(maxsize=None)
+def is_verbose():
+    return any(handler.level <= logging.INFO for handler in logger.handlers)
 
 
 def init_environment(cmd, prompt=True):
     check_prereqs(cmd, install=True)
     # Create a management cluster if needed
     try:
-        find_management_cluster_retry(cmd.cli_ctx)
+        find_management_cluster_retry(cmd)
     except ResourceNotFoundError as err:
-        if str(err) == "No CAPZ installation found":
-            _install_capz_components()
+        if str(err) == "No Cluster API installation found":
+            _install_capz_components(cmd)
     except subprocess.CalledProcessError:
         if prompt:
-            choices = ["kind - a local docker-based cluster",
-                       "AKS - a managed cluster in Azure",
+            choices = ["kind - a local Docker container-based cluster",
+                       "AKS - a managed cluster in the Azure cloud",
                        "exit - don't create a management cluster"]
             prompt = """
 No Kubernetes cluster was found using the default configuration.
@@ -61,61 +65,64 @@ Cluster API needs a "management cluster" to run its components.
 Learn more from the Cluster API Book:
 https://cluster-api.sigs.k8s.io/user/concepts.html
 
-Where should we create a management cluster?
-    """
+Where do you want to create a management cluster?
+"""
             choice_index = prompt_choice_list(prompt, choices)
         else:
             choice_index = 0
-        random_id = ''.join(random.choices(
-            string.ascii_lowercase + string.digits, k=6))
-        cluster_name = "capi-manager-" + random_id
+        cluster_name = "capi-manager"
         if choice_index == 0:
-            logger.info("kind management cluster")
-            # Install kind
-            kind_path = "kind"
-            if not which("kind"):
-                kind_path = install_kind(cmd)
-            cmd = [kind_path, "create", "cluster", "--name", cluster_name]
-            try:
-                output = subprocess.check_output(cmd, universal_newlines=True)
-                logger.info("%s returned:\n%s", " ".join(cmd), output)
-            except subprocess.CalledProcessError as err:
-                raise UnclassifiedUserFault from err
+            check_kind(cmd, install=not prompt)
+            begin_msg = 'Creating local management cluster "{}" with kind'.format(cluster_name)
+            end_msg = '✓ Created local management cluster "{}"'.format(cluster_name)
+            with Spinner(cmd, begin_msg, end_msg):
+                command = ["kind", "create", "cluster", "--name", cluster_name]
+                try:
+                    # if --verbose, don't capture stderr
+                    stderr = None if is_verbose() else subprocess.STDOUT
+                    output = subprocess.check_output(command, universal_newlines=True, stderr=stderr)
+                    logger.info("%s returned:\n%s", " ".join(command), output)
+                except subprocess.CalledProcessError as err:
+                    raise UnclassifiedUserFault("Couldn't create kind management cluster") from err
         elif choice_index == 1:
-            logger.info("AKS management cluster")
-            cmd = ["az", "group", "create", "-l",
-                   "southcentralus", "--name", cluster_name]
-            try:
-                output = subprocess.check_output(cmd, universal_newlines=True)
-                logger.info("%s returned:\n%s", " ".join(cmd), output)
-            except subprocess.CalledProcessError as err:
-                raise UnclassifiedUserFault from err
-            cmd = ["az", "aks", "create", "-g",
-                   cluster_name, "--name", cluster_name]
-            try:
-                output = subprocess.check_output(cmd, universal_newlines=True)
-                logger.info("%s returned:\n%s", " ".join(cmd), output)
-            except subprocess.CalledProcessError as err:
-                raise UnclassifiedUserFault from err
+            with Spinner(cmd, "Creating Azure resource group", "✓ Created Azure resource group"):
+                command = ["az", "group", "create", "-l", "southcentralus", "--name", cluster_name]
+                try:
+                    output = subprocess.check_output(command, universal_newlines=True)
+                    logger.info("%s returned:\n%s", " ".join(command), output)
+                except subprocess.CalledProcessError as err:
+                    raise UnclassifiedUserFault("Couldn't create Azure resource group") from err
+            with Spinner(cmd, "Creating Azure management cluster with AKS", "✓ Created AKS management cluster"):
+                command = ["az", "aks", "create", "-g", cluster_name, "--name", cluster_name]
+                try:
+                    output = subprocess.check_output(command, universal_newlines=True)
+                    logger.info("%s returned:\n%s", " ".join(command), output)
+                except subprocess.CalledProcessError as err:
+                    raise UnclassifiedUserFault("Couldn't create AKS management cluster") from err
         else:
             return
-        _install_capz_components()
+        _install_capz_components(cmd)
 
 
-def _install_capz_components():
+def _install_capz_components(cmd):
     os.environ["EXP_MACHINE_POOL"] = "true"
     os.environ["EXP_CLUSTER_RESOURCE_SET"] = "true"
-    command = ["clusterctl", "init", "--infrastructure", "azure"]
-    try:
-        output = subprocess.check_output(command, universal_newlines=True)
-        logger.info("%s returned:\n%s", " ".join(command), output)
-    except subprocess.CalledProcessError as err:
-        raise UnclassifiedUserFault("Can't locate a Kubernetes cluster") from err
+    with Spinner(cmd, "Initializing management cluster", "✓ Initialized management cluster"):
+        command = ["clusterctl", "init", "--infrastructure", "azure"]
+        try:
+            # if --verbose, don't capture stderr
+            stderr = None if is_verbose() else subprocess.STDOUT
+            output = subprocess.check_output(command, universal_newlines=True, stderr=stderr)
+            logger.info("%s returned:\n%s", " ".join(command), output)
+        except subprocess.CalledProcessError as err:
+            raise UnclassifiedUserFault("Can't locate a Kubernetes cluster") from err
 
 
-def create_management_cluster(cmd):
-    # TODO: add user confirmation
+def create_management_cluster(cmd, yes=False):
     check_prereqs(cmd)
+    msg = 'Do you want to initialize Cluster API on the current cluster?'
+    if not yes and not prompt_y_n(msg, default="n"):
+        return
 
     command = ["clusterctl", "init", "--infrastructure", "azure"]
     try:
@@ -127,7 +134,7 @@ def create_management_cluster(cmd):
 
 def delete_management_cluster(cmd, yes=False):  # pylint: disable=unused-argument
     exit_if_no_management_cluster()
-    msg = 'Do you want to delete CAPZ management components from the current cluster?'
+    msg = 'Do you want to delete Cluster API components from the current cluster?'
     if not yes and not prompt_y_n(msg, default="n"):
         return
 
@@ -137,7 +144,7 @@ def delete_management_cluster(cmd, yes=False):  # pylint: disable=unused-argumen
         output = subprocess.check_output(command, universal_newlines=True)
         logger.info("%s returned:\n%s", " ".join(command), output)
     except subprocess.CalledProcessError as err:
-        raise UnclassifiedUserFault from err
+        raise UnclassifiedUserFault("Couldn't delete components from management cluster") from err
     namespaces = [
         "capi-kubeadm-bootstrap-system",
         "capi-kubeadm-control-plane-system",
@@ -151,7 +158,7 @@ def delete_management_cluster(cmd, yes=False):  # pylint: disable=unused-argumen
         output = subprocess.check_output(command, universal_newlines=True)
         logger.info("%s returned:\n%s", " ".join(command), output)
     except subprocess.CalledProcessError as err:
-        raise UnclassifiedUserFault from err
+        raise UnclassifiedUserFault("Couldn't delete namespaces from management cluster") from err
 
 
 def move_management_cluster(cmd):
@@ -188,7 +195,7 @@ def show_management_cluster(_cmd, yes=False):
 
 def update_management_cluster(cmd, yes=False):
     exit_if_no_management_cluster()
-    msg = 'Do you want to update CAPZ management components on the current cluster?'
+    msg = 'Do you want to update Cluster API components on the current cluster?'
     if not yes and not prompt_y_n(msg, default="n"):
         return
     # Check for clusterctl tool
@@ -206,7 +213,7 @@ def update_management_cluster(cmd, yes=False):
         output = subprocess.check_output(command, universal_newlines=True)
         logger.info("%s returned:\n%s", " ".join(command), output)
     except subprocess.CalledProcessError as err:
-        raise UnclassifiedUserFault from err
+        raise UnclassifiedUserFault("Couldn't upgrade management cluster") from err
 
 
 # pylint: disable=inconsistent-return-statements
@@ -215,13 +222,11 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         capi_name,
         resource_group_name=None,
         location=None,
-        control_plane_machine_type=os.environ.get(
-            "AZURE_CONTROL_PLANE_MACHINE_TYPE"),
-        control_plane_machine_count=os.environ.get(
-            "AZURE_CONTROL_PLANE_MACHINE_COUNT", 3),
+        control_plane_machine_type=os.environ.get("AZURE_CONTROL_PLANE_MACHINE_TYPE"),
+        control_plane_machine_count=os.environ.get("AZURE_CONTROL_PLANE_MACHINE_COUNT", 3),
         node_machine_type=os.environ.get("AZURE_NODE_MACHINE_TYPE"),
         node_machine_count=os.environ.get("AZURE_NODE_MACHINE_COUNT", 3),
-        kubernetes_version=os.environ.get("AZURE_KUBERNETES_VERSION", "1.20.5"),
+        kubernetes_version=os.environ.get("AZURE_KUBERNETES_VERSION", "1.20.6"),
         subscription_id=os.environ.get("AZURE_SUBSCRIPTION_ID"),
         ssh_public_key=os.environ.get("AZURE_SSH_PUBLIC_KEY_B64", ""),
         vnet_name=None,
@@ -249,11 +254,12 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         "WINDOWS": windows,
         "NODEPOOL_TYPE": "machinepool" if machinepool else "machinedeployment",
     }
-    manifest = template.render(args)
     filename = capi_name + ".yaml"
-    with open(filename, "w") as manifest_file:
-        manifest_file.write(manifest)
-    logger.warning("wrote manifest file to %s", filename)
+    end_msg = '✓ Generated workload cluster configuration at "{}"'.format(filename)
+    with Spinner(cmd, "Generating workload cluster configuration", end_msg):
+        manifest = template.render(args)
+        with open(filename, "w") as manifest_file:
+            manifest_file.write(manifest)
 
     # Check if the RG already exists and that it's consistent with the location
     # specified. CAPZ will actually create (and delete) the RG if needed.
@@ -283,90 +289,69 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
 
     init_environment(cmd, not yes)
 
-    # Identify or create a Kubernetes v1.16+ management cluster
-    find_management_cluster_retry(cmd.cli_ctx)
+    # Apply the cluster configuration.
+    attempts, delay = 100, 3
+    begin_msg = 'Creating workload cluster "{}"'.format(capi_name)
+    end_msg = '✓ Created workload cluster "{}"'.format(capi_name)
+    with Spinner(cmd, begin_msg, end_msg):
+        command = ["kubectl", "apply", "-f", filename]
+        # if --verbose, don't capture stderr
+        stderr = None if is_verbose() else subprocess.STDOUT
+        for _ in range(attempts):
+            try:
+                output = subprocess.check_output(command, universal_newlines=True, stderr=stderr)
+                logger.info("%s returned:\n%s", " ".join(command), output)
+                break
+            except subprocess.CalledProcessError as err:
+                logger.info(err)
+                time.sleep(delay)
+        else:
+            msg = "Couldn't apply workload cluster manifest after waiting 5 minutes."
+            raise ResourceNotFoundError(msg)
 
-    # Apply the cluster configuration
-    delay = 5
-    hook = cmd.cli_ctx.get_progress_controller(True)
-    msg = "Applying the workload cluster manifest "
-    hook.add(message=msg, value=0, total_val=1.0)
-    logger.info(msg)
-    command = ["kubectl", "apply", "-f", filename]
-    for i in range(60):
-        hook.add(message=msg, value=0.1 * i, total_val=1.0)
-        try:
-            output = subprocess.check_output(command, universal_newlines=True)
-            logger.info("%s returned:\n%s", " ".join(command), output)
-            break
-        except subprocess.CalledProcessError as err:
-            logger.info(err)
-            time.sleep(delay + delay * i)
-    else:
-        msg = "Couldn't apply workload cluster manifest after waiting 5 minutes."
-        raise ResourceNotFoundError(msg)
-    status = "Applied the workload cluster manifest "
-    hook.add(message=status, value=1.0, total_val=1.0)
-
-    # show the cluster's initialization progress
-    # TODO: should we loop on this command with `watch`?
-    logger.warning("\nCluster Status:")
-    command = ["clusterctl", "describe", "cluster", capi_name]
-    try:
-        subprocess.run(command, check=True)
-    except subprocess.CalledProcessError as err:
-        raise UnclassifiedUserFault from err
-
-    # write the kubeconfig for the workload cluster to a file
-    # Retry this operation several times, then give up and just print the command
-    delay = 5
-    hook = cmd.cli_ctx.get_progress_controller(True)
-    msg = "Waiting for kubeconfig to become available "
-    hook.add(message=msg, value=0, total_val=1.0)
-    logger.info(msg)
-    for i in range(60):
-        hook.add(message=msg, value=0.1 * i, total_val=1.0)
-        try:
-            status = get_kubeconfig(capi_name)
-            break
-        except UnclassifiedUserFault:
-            time.sleep(delay + delay * i)
-    else:
-        msg = """\
+    # Write the kubeconfig for the workload cluster to a file.
+    # Retry this operation several times, then give up and just print the command.
+    attempts, delay = 100, 3
+    with Spinner(cmd, "Waiting for access to workload cluster", "✓ Workload cluster is accessible"):
+        for _ in range(attempts):
+            try:
+                get_kubeconfig(capi_name)
+                break
+            except UnclassifiedUserFault:
+                time.sleep(delay)
+        else:
+            msg = """\
 Kubeconfig wasn't available after waiting 5 minutes.
 When the cluster is ready, run this command to fetch the kubeconfig:
-  clusterctl get kubeconfig {}
+clusterctl get kubeconfig {}
 """.format(capi_name)
-        raise ResourceNotFoundError(msg)
-    hook.add(message=status, value=1.0, total_val=1.0)
+            raise ResourceNotFoundError(msg)
 
     workload_cfg = capi_name + ".kubeconfig"
-
-    # Wait for an apiserver to be available
+    logger.warning('✓ Workload access configuration written to "%s"', workload_cfg)
 
     # Install CNI
-    delay = 5
-    hook = cmd.cli_ctx.get_progress_controller(True)
-    msg = "Installing CNI with VXLAN "
-    hook.add(message=msg, value=0, total_val=1.0)
-    # pylint: disable=line-too-long
-    calico_manifest = "https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/master/templates/addons/calico.yaml"
-    command = ["kubectl", "apply", "-f", calico_manifest, "--kubeconfig", workload_cfg]
-    for i in range(60):
-        hook.add(message=msg, value=0.1 * i, total_val=1.0)
-        try:
-            subprocess.run(command, check=True)
-            break
-        except subprocess.CalledProcessError as err:
-            logger.info(err)
-            time.sleep(delay + delay * i)
-    else:
-        msg = "Couldn't install CNI after waiting 5 minutes."
-        raise ResourceNotFoundError(msg)
-    hook.add(message=status, value=1.0, total_val=1.0)
+    attempts, delay = 100, 3
+    calico_manifest = "https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/master/templates/addons/calico.yaml"  # pylint: disable=line-too-long
+    with Spinner(cmd, "Deploying Container Network Interface (CNI) support", "✓ Deployed CNI to workload cluster"):
+        command = ["kubectl", "apply", "-f", calico_manifest, "--kubeconfig", workload_cfg]
+        # if --verbose, don't capture stderr
+        stderr = None if is_verbose() else subprocess.STDOUT
+        for _ in range(attempts):
+            try:
+                subprocess.check_output(command, universal_newlines=True, stderr=stderr)
+                break
+            except subprocess.CalledProcessError as err:
+                logger.info(err)
+                time.sleep(delay)
+        else:
+            msg = "Couldn't install CNI after waiting 5 minutes."
+            raise ResourceNotFoundError(msg)
 
     # Wait for all nodes to be ready before returning
-    wait_for_ready(workload_cfg)
+    with Spinner(cmd, "Waiting for workload cluster nodes to be ready", "✓ Workload cluster is ready"):
+        wait_for_ready(workload_cfg)
+
     return show_workload_cluster(cmd, capi_name)
 
 
@@ -377,18 +362,20 @@ def find_nodes(kubeconfig):
         logger.info("%s returned:\n%s", " ".join(command), output)
         return output.splitlines()
     except subprocess.CalledProcessError as err:
-        raise UnclassifiedUserFault from err
+        raise UnclassifiedUserFault("Couldn't get nodes of workload cluster") from err
 
 
 def wait_for_ready(kubeconfig):
     base_command = ["kubectl", "wait", "--for", "condition=Ready", "--kubeconfig", kubeconfig, "--timeout", "10s"]
     timeout = 60 * 5
 
+    # if --verbose, don't capture stderr
+    stderr = None if is_verbose() else subprocess.STDOUT
     start = time.time()
     while time.time() < start + timeout:
         command = base_command + find_nodes(kubeconfig)
         try:
-            output = subprocess.check_output(command, universal_newlines=True)
+            output = subprocess.check_output(command, universal_newlines=True, stderr=stderr)
             logger.info("%s returned:\n%s", " ".join(command), output)
             return
         except subprocess.CalledProcessError as err:
@@ -400,10 +387,12 @@ def wait_for_ready(kubeconfig):
 
 def get_kubeconfig(capi_name):
     cmd = ["clusterctl", "get", "kubeconfig", capi_name]
+    # if --verbose, don't capture stderr
+    stderr = None if is_verbose() else subprocess.STDOUT
     try:
-        output = subprocess.check_output(cmd, universal_newlines=True)
+        output = subprocess.check_output(cmd, universal_newlines=True, stderr=stderr)
     except subprocess.CalledProcessError as err:
-        raise UnclassifiedUserFault from err
+        raise UnclassifiedUserFault("Couldn't get kubeconfig") from err
     filename = capi_name + ".kubeconfig"
     with open(filename, "w") as kubeconfig_file:
         kubeconfig_file.write(output)
@@ -420,7 +409,7 @@ def delete_workload_cluster(cmd, capi_name, yes=False):
         output = subprocess.check_output(cmd, universal_newlines=True)
         logger.info("%s returned:\n%s", " ".join(cmd), output)
     except subprocess.CalledProcessError as err:
-        raise UnclassifiedUserFault from err
+        raise UnclassifiedUserFault("Couldn't delete workload cluster") from err
 
 
 def list_workload_clusters(cmd):  # pylint: disable=unused-argument
@@ -430,7 +419,7 @@ def list_workload_clusters(cmd):  # pylint: disable=unused-argument
         output = subprocess.check_output(command, universal_newlines=True)
         logger.info("%s returned:\n%s", " ".join(command), output)
     except subprocess.CalledProcessError as err:
-        raise UnclassifiedUserFault from err
+        raise UnclassifiedUserFault("Couldn't list workload clusters") from err
     return json.loads(output)
 
 
@@ -442,7 +431,7 @@ def show_workload_cluster(cmd, capi_name):  # pylint: disable=unused-argument
         output = subprocess.check_output(command, stderr=subprocess.STDOUT, universal_newlines=True)
         logger.info("%s returned:\n%s", " ".join(command), output)
     except subprocess.CalledProcessError as err:
-        raise UnclassifiedUserFault from err
+        raise UnclassifiedUserFault("Couldn't get the workload cluster {}".format(capi_name)) from err
     return json.loads(output)
 
 
@@ -460,18 +449,63 @@ def check_prereqs(cmd, install=False):
         check_environment_var(var)
 
 
-def check_kubectl(cmd, install=False):
-    if not which("kubectl"):
-        logger.warning("kubectl was not found.")
-        if install or prompt_y_n("Download and install kubectl?", default="n"):
-            install_kubectl(cmd)
+class Spinner(object):
+
+    def __init__(self, cmd, begin_msg="In Progress", end_msg=" ✓ Finished"):
+        self._controller = cmd.cli_ctx.get_progress_controller()
+        self.begin_msg, self.end_msg = begin_msg, end_msg
+        self.tick()
+
+    def begin(self, **kwargs):
+        if not is_verbose():
+            self._controller.begin(**kwargs)
+
+    def end(self, **kwargs):
+        self._controller.end(**kwargs)
+
+    def tick(self):
+        if not is_verbose() and not self._controller.reporter.closed:
+            Timer(0.25, self.tick).start()
+            self.update()
+
+    def update(self):
+        self._controller.update()
+
+    def __enter__(self):
+        self._controller.begin(message=self.begin_msg)
+        logger.info(self.begin_msg)
+        return self
+
+    def __exit__(self, _type, value, traceback):
+        if traceback:
+            logger.debug(traceback)
+        else:
+            self._controller.end(message=self.end_msg)
+            logger.warning(self.end_msg)
 
 
 def check_clusterctl(cmd, install=False):
     if not which("clusterctl"):
-        logger.warning("clusterctl was not found.")
+        logger.info("clusterctl was not found.")
         if install or prompt_y_n("Download and install clusterctl?", default="n"):
-            install_clusterctl(cmd)
+            with Spinner(cmd, "Downloading clusterctl", "✓ Downloaded clusterctl"):
+                install_clusterctl(cmd)
+
+
+def check_kind(cmd, install=False):
+    if not which("kind"):
+        logger.info("kind was not found.")
+        if install or prompt_y_n("Download and install kind?", default="n"):
+            with Spinner(cmd, "Downloading kind", "✓ Downloaded kind"):
+                install_kind(cmd)
+
+
+def check_kubectl(cmd, install=False):
+    if not which("kubectl"):
+        logger.info("kubectl was not found.")
+        if install or prompt_y_n("Download and install kubectl?", default="n"):
+            with Spinner(cmd, "Downloading kubectl", "✓ Downloaded kubectl"):
+                install_kubectl(cmd)
 
 
 def check_environment_var(var):
@@ -490,24 +524,17 @@ def check_environment_var(var):
         logger.info("Set environment variable %s from %s", var_b64, var)
 
 
-def find_management_cluster_retry(cli_ctx, delay=3):
-    hook = cli_ctx.get_progress_controller(True)
-    msg = "Waiting for CAPI components to be running"
-    hook.add(message=msg, value=0, total_val=1.0)
-    logger.info(msg)
-    for i in range(0, 10):
-        hook.add(message=msg, value=0.1 * i, total_val=1.0)
-        try:
-            find_management_cluster()
-            break
-        except ResourceNotFoundError:
-            time.sleep(delay + delay * i)
-    else:
-        return False
-    msg = "CAPI components are running"
-    hook.add(message=msg, value=1.0, total_val=1.0)
-    logger.info(msg)
-    return True
+def find_management_cluster_retry(cmd, delay=3):
+    with Spinner(cmd, "Waiting for Cluster API to be ready", "✓ Cluster API is ready"):
+        for _ in range(0, 100):
+            try:
+                find_management_cluster()
+                break
+            except ResourceNotFoundError:
+                time.sleep(delay)
+        else:
+            return False
+        return True
 
 
 def find_management_cluster():
@@ -594,8 +621,7 @@ def install_clusterctl(_cmd, client_version="latest", install_location=None, sou
     if not os.path.exists(install_dir):
         os.makedirs(install_dir)
 
-    logger.warning('Downloading client to "%s" from "%s"',
-                   install_location, file_url)
+    logger.info('Downloading client to "%s" from "%s"', install_location, file_url)
     try:
         urlretrieve(file_url, install_location)
         perms = (os.stat(install_location).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
@@ -604,11 +630,12 @@ def install_clusterctl(_cmd, client_version="latest", install_location=None, sou
         err_msg = "Connection error while attempting to download client ({})".format(ex)
         raise FileOperationError(err_msg) from ex
 
-    logger.warning(
-        "Please ensure that %s is in your search PATH, so the `%s` command can be found.",
-        install_dir,
-        cli,
-    )
+    if not which(cli):
+        logger.warning(
+            "Please ensure that %s is in your search PATH, so the `%s` command can be found.",
+            install_dir,
+            cli,
+        )
 
 
 def install_kind(_cmd, client_version="v0.10.0", install_location=None, source_url=None):
@@ -639,8 +666,7 @@ def install_kind(_cmd, client_version="v0.10.0", install_location=None, source_u
     else:
         raise InvalidArgumentValueError('System "{}" is not supported by kind.'.format(system))
 
-    logger.warning('Downloading client to "%s" from "%s"',
-                   install_location, file_url)
+    logger.info('Downloading client to "%s" from "%s"', install_location, file_url)
     try:
         urlretrieve(file_url, install_location)
         os.chmod(
@@ -668,11 +694,12 @@ def install_kind(_cmd, client_version="v0.10.0", install_location=None, source_u
                 "You only need to do it once".format(install_dir, cli)
             )
     else:
-        logger.warning(
-            "Please ensure that %s is in your search PATH, so the `%s` command can be found.",
-            install_dir,
-            cli,
-        )
+        if not which(cli):
+            logger.warning(
+                "Please ensure that %s is in your search PATH, so the `%s` command can be found.",
+                install_dir,
+                cli,
+            )
     return install_location
 
 
@@ -719,8 +746,7 @@ def install_kubectl(cmd, client_version="latest", install_location=None, source_
             "Proxy server ({}) does not exist on the cluster.".format(system)
         )
 
-    logger.warning('Downloading client to "%s" from "%s"',
-                   install_location, file_url)
+    logger.info('Downloading client to "%s" from "%s"', install_location, file_url)
     try:
         urlretrieve(file_url, install_location)
         os.chmod(
@@ -749,8 +775,9 @@ def install_kubectl(cmd, client_version="latest", install_location=None, source_
                 "You only need to do it once".format(install_dir, cli)
             )
     else:
-        logger.warning(
-            "Please ensure that %s is in your search PATH, so the `%s` command can be found.",
-            install_dir,
-            cli,
-        )
+        if not which(cli):
+            logger.warning(
+                "Please ensure that %s is in your search PATH, so the `%s` command can be found.",
+                install_dir,
+                cli,
+            )
