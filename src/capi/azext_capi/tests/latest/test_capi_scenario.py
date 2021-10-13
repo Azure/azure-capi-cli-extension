@@ -59,7 +59,7 @@ class CapiScenarioTest(ScenarioTest):
                 self.check('items[1].metadata.name', 'testcluster2'),
             ])
 
-            count = len(self.cmd("capi list").get_output_in_json())
+            count = len(self.cmd("capi list --output json").get_output_in_json())
             self.assertEqual(count, 4)  # "apiVersion", "items", "kind", and "metadata".
 
             self.assertEqual(mock.call_count, 2)
@@ -77,7 +77,7 @@ class CapiScenarioTest(ScenarioTest):
                 self.check('metadata.name', 'testcluster1'),
             ])
 
-            count = len(self.cmd("capi show --name testcluster1").get_output_in_json())
+            count = len(self.cmd("capi show --name testcluster1 --output json").get_output_in_json())
             self.assertEqual(count, 5)  # "apiVersion", "kind", "metadata", "spec", and "status"
 
             self.assertEqual(mock.call_count, 2)
