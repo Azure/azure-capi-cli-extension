@@ -236,7 +236,7 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         output_path=None,
         yes=False):
     # Generate the cluster configuration
-    env = Environment(loader=PackageLoader(__name__, "templates"), auto_reload=False)
+    env = Environment(loader=PackageLoader("azext_capi", "templates"), auto_reload=False)
     logger.debug("Available templates: %s", env.list_templates())
     template = env.get_template("base.jinja")
 
