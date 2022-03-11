@@ -73,8 +73,8 @@ Where do you want to create a management cluster?
         cluster_name = "capi-manager"
         if choice_index == 0:
             check_kind(cmd, install=not prompt)
-            begin_msg = 'Creating local management cluster "{}" with kind'.format(cluster_name)
-            end_msg = '✓ Created local management cluster "{}"'.format(cluster_name)
+            begin_msg = f'Creating local management cluster "{cluster_name}" with kind'
+            end_msg = f'✓ Created local management cluster "{cluster_name}"'
             with Spinner(cmd, begin_msg, end_msg):
                 command = ["kind", "create", "cluster", "--name", cluster_name]
                 try:
@@ -255,10 +255,10 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         "NODEPOOL_TYPE": "machinepool" if machinepool else "machinedeployment",
     }
     filename = capi_name + ".yaml"
-    end_msg = '✓ Generated workload cluster configuration at "{}"'.format(filename)
+    end_msg = f'✓ Generated workload cluster configuration at "{filename}"'
     with Spinner(cmd, "Generating workload cluster configuration", end_msg):
         manifest = template.render(args)
-        with open(filename, "w") as manifest_file:
+        with open(filename, "w", encoding="utf-8") as manifest_file:
             manifest_file.write(manifest)
 
     # Check if the RG already exists and that it's consistent with the location
@@ -282,8 +282,7 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
             msg = "--location is required to create the resource group {}."
             raise RequiredArgumentMissingError(msg.format(resource_group_name)) from err
 
-    msg = 'Do you want to create this Kubernetes cluster "{}" in the Azure resource group "{}"?'.format(
-        capi_name, resource_group_name)
+    msg = f'Create the Kubernetes cluster "{capi_name}" in the Azure resource group "{resource_group_name}"?'
     if not yes and not prompt_y_n(msg, default="n"):
         return
 
@@ -291,8 +290,8 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
 
     # Apply the cluster configuration.
     attempts, delay = 100, 3
-    begin_msg = 'Creating workload cluster "{}"'.format(capi_name)
-    end_msg = '✓ Created workload cluster "{}"'.format(capi_name)
+    begin_msg = f'Creating workload cluster "{capi_name}"'
+    end_msg = f'✓ Created workload cluster "{capi_name}"'
     with Spinner(cmd, begin_msg, end_msg):
         command = ["kubectl", "apply", "-f", filename]
         # if --verbose, don't capture stderr
@@ -320,11 +319,11 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
             except UnclassifiedUserFault:
                 time.sleep(delay)
         else:
-            msg = """\
+            msg = f"""\
 Kubeconfig wasn't available after waiting 5 minutes.
 When the cluster is ready, run this command to fetch the kubeconfig:
-clusterctl get kubeconfig {}
-""".format(capi_name)
+clusterctl get kubeconfig {capi_name}
+"""
             raise ResourceNotFoundError(msg)
 
     workload_cfg = capi_name + ".kubeconfig"
@@ -394,14 +393,14 @@ def get_kubeconfig(capi_name):
     except subprocess.CalledProcessError as err:
         raise UnclassifiedUserFault("Couldn't get kubeconfig") from err
     filename = capi_name + ".kubeconfig"
-    with open(filename, "w") as kubeconfig_file:
+    with open(filename, "w", encoding="utf-8") as kubeconfig_file:
         kubeconfig_file.write(output)
-    return "Wrote kubeconfig file to {} ".format(filename)
+    return f"Wrote kubeconfig file to {filename} "
 
 
 def delete_workload_cluster(cmd, capi_name, yes=False):
     exit_if_no_management_cluster()
-    msg = 'Do you want to delete this Kubernetes cluster "{}"?'.format(capi_name)
+    msg = f'Do you want to delete this Kubernetes cluster "{capi_name}"?'
     if not yes and not prompt_y_n(msg, default="n"):
         return
     cmd = ["kubectl", "delete", "cluster", capi_name]
@@ -431,7 +430,7 @@ def show_workload_cluster(cmd, capi_name):  # pylint: disable=unused-argument
         output = subprocess.check_output(command, stderr=subprocess.STDOUT, universal_newlines=True)
         logger.info("%s returned:\n%s", " ".join(command), output)
     except subprocess.CalledProcessError as err:
-        raise UnclassifiedUserFault("Couldn't get the workload cluster {}".format(capi_name)) from err
+        raise UnclassifiedUserFault(f"Couldn't get the workload cluster {capi_name}") from err
     return json.loads(output)
 
 
@@ -449,7 +448,7 @@ def check_prereqs(cmd, install=False):
         check_environment_var(var)
 
 
-class Spinner(object):
+class Spinner():
 
     def __init__(self, cmd, begin_msg="In Progress", end_msg=" ✓ Finished"):
         self._controller = cmd.cli_ctx.get_progress_controller()
@@ -517,7 +516,7 @@ def check_environment_var(var):
         try:
             val = os.environ[var]
         except KeyError as err:
-            raise RequiredArgumentMissingError("Required environment variable {} was not found.".format(err)) from err
+            raise RequiredArgumentMissingError(f"Required environment variable {err} was not found.") from err
         # Set the base64-encoded variable as a convenience
         val = base64.b64encode(val.encode("utf-8")).decode("ascii")
         os.environ[var_b64] = val
@@ -609,8 +608,7 @@ def install_clusterctl(_cmd, client_version="latest", install_location=None, sou
     if system in ("Darwin", "Linux"):
         file_url = source_url.format(client_version, system.lower())
     else:  # TODO: support Windows someday?
-        raise ValidationError(
-            'The clusterctl binary is not available for "{}"'.format(system))
+        raise ValidationError(f'The clusterctl binary is not available for "{system}"')
 
     # ensure installation directory exists
     if install_location is None:
@@ -627,7 +625,7 @@ def install_clusterctl(_cmd, client_version="latest", install_location=None, sou
         perms = (os.stat(install_location).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
         os.chmod(install_location, perms)
     except IOError as ex:
-        err_msg = "Connection error while attempting to download client ({})".format(ex)
+        err_msg = f"Connection error while attempting to download client ({ex})"
         raise FileOperationError(err_msg) from ex
 
     if not which(cli):
@@ -664,7 +662,7 @@ def install_kind(_cmd, client_version="v0.10.0", install_location=None, source_u
     elif system == "Darwin":
         file_url = source_url.format(client_version, "darwin")
     else:
-        raise InvalidArgumentValueError('System "{}" is not supported by kind.'.format(system))
+        raise InvalidArgumentValueError(f'System "{system}" is not supported by kind.')
 
     logger.info('Downloading client to "%s" from "%s"', install_location, file_url)
     try:
@@ -686,12 +684,13 @@ def install_kind(_cmd, client_version="v0.10.0", install_location=None, source_u
         if not found:
             # pylint: disable=logging-format-interpolation
             logger.warning(
-                'Please add "{0}" to your search PATH so the `{1}` can be found. 2 options: \n'
-                '    1. Run "set PATH=%PATH%;{0}" or "$env:path += \'{0}\'" for PowerShell. '
+                'Please add "%s" to your search PATH so the `%s` can be found. 2 options: \n'
+                '    1. Run "set PATH=%%PATH%%;%s" or "$env:path += \'%s\'" for PowerShell. '
                 "This is good for the current command session.\n"
                 "    2. Update system PATH environment variable by following "
                 '"Control Panel->System->Advanced->Environment Variables", and re-open the command window. '
-                "You only need to do it once".format(install_dir, cli)
+                "You only need to do it once",
+                install_dir, cli, install_dir, install_dir,
             )
     else:
         if not which(cli):
@@ -715,11 +714,10 @@ def install_kubectl(cmd, client_version="latest", install_location=None, source_
             source_url = "https://mirror.azure.cn/kubernetes/kubectl"
 
     if client_version == "latest":
-        context = ssl_context()
-        version = urlopen(source_url + "/stable.txt", context=context).read()
-        client_version = version.decode("UTF-8").strip()
+        with urlopen(source_url + "/stable.txt", context=ssl_context()) as f:
+            client_version = f.read().decode("utf-8").strip()
     else:
-        client_version = "v%s" % client_version
+        client_version = f"v{client_version}"
 
     file_url = ""
     system = platform.system()
@@ -743,7 +741,7 @@ def install_kubectl(cmd, client_version="latest", install_location=None, source_
         file_url = base_url.format(client_version, "darwin", "kubectl")
     else:
         raise InvalidArgumentValueError(
-            "Proxy server ({}) does not exist on the cluster.".format(system)
+            f"Proxy server ({system}) does not exist on the cluster."
         )
 
     logger.info('Downloading client to "%s" from "%s"', install_location, file_url)
@@ -754,7 +752,7 @@ def install_kubectl(cmd, client_version="latest", install_location=None, source_
             os.stat(install_location).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
         )
     except IOError as ex:
-        err_msg = "Connection error while attempting to download client ({})".format(ex)
+        err_msg = f"Connection error while attempting to download client ({ex})"
         raise FileOperationError(err_msg) from ex
 
     if system == "Windows":
@@ -767,12 +765,13 @@ def install_kubectl(cmd, client_version="latest", install_location=None, source_
         if not found:
             # pylint: disable=logging-format-interpolation
             logger.warning(
-                'Please add "{0}" to your search PATH so the `{1}` can be found. 2 options: \n'
-                '    1. Run "set PATH=%PATH%;{0}" or "$env:path += \'{0}\'" for PowerShell. '
+                'Please add "%s" to your search PATH so the `%s` can be found. 2 options: \n'
+                '    1. Run "set PATH=%%PATH%%;%s" or "$env:path += \'%s\'" for PowerShell. '
                 "This is good for the current command session.\n"
                 "    2. Update system PATH environment variable by following "
                 '"Control Panel->System->Advanced->Environment Variables", and re-open the command window. '
-                "You only need to do it once".format(install_dir, cli)
+                "You only need to do it once",
+                install_dir, cli, install_dir, install_dir,
             )
     else:
         if not which(cli):
