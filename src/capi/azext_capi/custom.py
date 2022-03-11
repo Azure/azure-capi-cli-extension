@@ -463,7 +463,7 @@ class Spinner():
         self._controller.end(**kwargs)
 
     def tick(self):
-        if not is_verbose() and not self._controller.reporter.closed:
+        if not is_verbose() and self._controller.is_running():
             Timer(0.25, self.tick).start()
             self.update()
 
@@ -478,6 +478,7 @@ class Spinner():
     def __exit__(self, _type, value, traceback):
         if traceback:
             logger.debug(traceback)
+            self._controller.end()
         else:
             self._controller.end(message=self.end_msg)
             logger.warning(self.end_msg)
