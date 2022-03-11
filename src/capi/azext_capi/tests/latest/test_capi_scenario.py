@@ -7,7 +7,7 @@ import os
 import unittest
 from unittest.mock import MagicMock, Mock, patch
 
-from azure_devtools.scenario_tests import AllowLargeResponse
+from azure.cli.testsdk.scenario_tests import AllowLargeResponse
 from azure.cli.core.azclierror import InvalidArgumentValueError
 from azure.cli.core.azclierror import RequiredArgumentMissingError
 from azure.cli.testsdk import (ScenarioTest, ResourceGroupPreparer)
