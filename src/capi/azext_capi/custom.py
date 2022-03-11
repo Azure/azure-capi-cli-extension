@@ -55,8 +55,8 @@ def init_environment(cmd, prompt=True):
             _install_capz_components(cmd)
     except subprocess.CalledProcessError:
         if prompt:
-            choices = ["kind - a local Docker container-based cluster",
-                       "AKS - a managed cluster in the Azure cloud",
+            choices = ["azure - a management cluster in the Azure cloud",
+                       "local - a local Docker container-based management cluster",
                        "exit - don't create a management cluster"]
             prompt = """
 No Kubernetes cluster was found using the default configuration.
@@ -72,19 +72,6 @@ Where do you want to create a management cluster?
             choice_index = 0
         cluster_name = "capi-manager"
         if choice_index == 0:
-            check_kind(cmd, install=not prompt)
-            begin_msg = f'Creating local management cluster "{cluster_name}" with kind'
-            end_msg = f'✓ Created local management cluster "{cluster_name}"'
-            with Spinner(cmd, begin_msg, end_msg):
-                command = ["kind", "create", "cluster", "--name", cluster_name]
-                try:
-                    # if --verbose, don't capture stderr
-                    stderr = None if is_verbose() else subprocess.STDOUT
-                    output = subprocess.check_output(command, universal_newlines=True, stderr=stderr)
-                    logger.info("%s returned:\n%s", " ".join(command), output)
-                except subprocess.CalledProcessError as err:
-                    raise UnclassifiedUserFault("Couldn't create kind management cluster") from err
-        elif choice_index == 1:
             with Spinner(cmd, "Creating Azure resource group", "✓ Created Azure resource group"):
                 command = ["az", "group", "create", "-l", "southcentralus", "--name", cluster_name]
                 try:
@@ -99,6 +86,19 @@ Where do you want to create a management cluster?
                     logger.info("%s returned:\n%s", " ".join(command), output)
                 except subprocess.CalledProcessError as err:
                     raise UnclassifiedUserFault("Couldn't create AKS management cluster") from err
+        elif choice_index == 1:
+            check_kind(cmd, install=not prompt)
+            begin_msg = f'Creating local management cluster "{cluster_name}" with kind'
+            end_msg = f'✓ Created local management cluster "{cluster_name}"'
+            with Spinner(cmd, begin_msg, end_msg):
+                command = ["kind", "create", "cluster", "--name", cluster_name]
+                try:
+                    # if --verbose, don't capture stderr
+                    stderr = None if is_verbose() else subprocess.STDOUT
+                    output = subprocess.check_output(command, universal_newlines=True, stderr=stderr)
+                    logger.info("%s returned:\n%s", " ".join(command), output)
+                except subprocess.CalledProcessError as err:
+                    raise UnclassifiedUserFault("Couldn't create kind management cluster") from err
         else:
             return
         _install_capz_components(cmd)
