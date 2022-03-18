@@ -27,10 +27,10 @@ from azure.cli.core.azclierror import RequiredArgumentMissingError
 from azure.cli.core.azclierror import ResourceNotFoundError
 from azure.cli.core.azclierror import UnclassifiedUserFault
 from azure.cli.core.azclierror import ValidationError
+from azure.core.exceptions import ResourceNotFoundError as OldResourceNotFoundError
 from jinja2 import Environment, PackageLoader
 from knack.log import get_logger
 from knack.prompting import prompt_choice_list, prompt_y_n
-from msrestazure.azure_exceptions import CloudError
 from six.moves.urllib.request import urlopen  # pylint: disable=import-error
 
 from ._helpers import ssl_context, urlretrieve
@@ -80,12 +80,17 @@ Where do you want to create a management cluster?
                 except subprocess.CalledProcessError as err:
                     raise UnclassifiedUserFault("Couldn't create Azure resource group") from err
             with Spinner(cmd, "Creating Azure management cluster with AKS", "✓ Created AKS management cluster"):
-                command = ["az", "aks", "create", "-g", cluster_name, "--name", cluster_name]
+                command = ["az", "aks", "create", "-g", cluster_name, "--name", cluster_name, "--generate-ssh-keys"]
                 try:
                     output = subprocess.check_output(command, universal_newlines=True)
                     logger.info("%s returned:\n%s", " ".join(command), output)
                 except subprocess.CalledProcessError as err:
                     raise UnclassifiedUserFault("Couldn't create AKS management cluster") from err
+                try:
+                    command = ["az", "aks", "get-credentials", "-g", cluster_name, "--name", cluster_name]
+                    output = subprocess.check_call(command, universal_newlines=True)
+                except subprocess.CalledProcessError as err:
+                    raise UnclassifiedUserFault("Couldn't get credentials for AKS management cluster") from err
         elif choice_index == 1:
             check_kind(cmd, install=not prompt)
             begin_msg = f'Creating local management cluster "{cluster_name}" with kind'
@@ -275,9 +280,7 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         elif location != rg.location:
             msg = "--location is {}, but the resource group {} already exists in {}."
             raise InvalidArgumentValueError(msg.format(location, resource_group_name, rg.location))
-    except CloudError as err:
-        if 'could not be found' not in err.message:
-            raise
+    except (ResourceNotFoundError, OldResourceNotFoundError) as err:
         if not location:
             msg = "--location is required to create the resource group {}."
             raise RequiredArgumentMissingError(msg.format(resource_group_name)) from err
