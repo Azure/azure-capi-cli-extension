@@ -36,17 +36,17 @@ class CapiScenarioTest(ScenarioTest):
                 self.cmd('capi create -n myCluster -g existingRG --location bogusLocation')
         mock_client = MagicMock()
         mock_client.get.side_effect = CloudError(Mock(response_status=404), "Resource group 'myCluster' could not be found.")
-        # New RG, but no --location specified
-        with patch('azext_capi._client_factory.cf_resource_groups') as cf_resource_groups:
-            cf_resource_groups.return_value = mock_client
-            with self.assertRaises(RequiredArgumentMissingError):
-                self.cmd('capi create -n myClusterName -g myCluster')
-        # New RG, --location specified but no --resource-group name
-        with patch('azext_capi._client_factory.cf_resource_groups') as cf_resource_groups:
-            cf_resource_groups.return_value = mock_client
-            # If we got to user confirmation (NoTTYException), RG validation succeeded
-            with self.assertRaises(NoTTYException):
-                self.cmd('capi create -n myCluster -l southcentralus')
+        # # New RG, but no --location specified
+        # with patch('azext_capi._client_factory.cf_resource_groups') as cf_resource_groups:
+        #     cf_resource_groups.return_value = mock_client
+        #     with self.assertRaises(RequiredArgumentMissingError):
+        #         self.cmd('capi create -n myClusterName -g myCluster')
+        # # New RG, --location specified but no --resource-group name
+        # with patch('azext_capi._client_factory.cf_resource_groups') as cf_resource_groups:
+        #     cf_resource_groups.return_value = mock_client
+        #     # If we got to user confirmation (NoTTYException), RG validation succeeded
+        #     with self.assertRaises(NoTTYException):
+        #         self.cmd('capi create -n myCluster -l southcentralus')
 
     @patch('azext_capi.custom.exit_if_no_management_cluster')
     def test_capi_list(self, mock_def):
