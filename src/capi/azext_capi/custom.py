@@ -620,21 +620,7 @@ def install_clusterctl(_cmd, client_version="latest", install_location=None, sou
     if not os.path.exists(install_dir):
         os.makedirs(install_dir)
 
-    logger.info('Downloading client to "%s" from "%s"', install_location, file_url)
-    try:
-        urlretrieve(file_url, install_location)
-        perms = (os.stat(install_location).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-        os.chmod(install_location, perms)
-    except IOError as ex:
-        err_msg = f"Connection error while attempting to download client ({ex})"
-        raise FileOperationError(err_msg) from ex
-
-    if not which(cli):
-        logger.warning(
-            "Please ensure that %s is in your search PATH, so the `%s` command can be found.",
-            install_dir,
-            cli,
-        )
+    return download_binary(install_location, install_dir, file_url, system, cli)
 
 
 def install_kind(_cmd, client_version="v0.10.0", install_location=None, source_url=None):
@@ -665,42 +651,7 @@ def install_kind(_cmd, client_version="v0.10.0", install_location=None, source_u
     else:
         raise InvalidArgumentValueError(f'System "{system}" is not supported by kind.')
 
-    logger.info('Downloading client to "%s" from "%s"', install_location, file_url)
-    try:
-        urlretrieve(file_url, install_location)
-        os.chmod(
-            install_location,
-            os.stat(install_location).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
-        )
-    except IOError as ex:
-        raise FileOperationError("Connection error while attempting to download client") from ex
-
-    if system == "Windows":
-        # be verbose, as the install_location likely not in Windows's search PATHs
-        env_paths = os.environ["PATH"].split(";")
-        found = next(
-            (x for x in env_paths if x.lower().rstrip("\\") == install_dir.lower()),
-            None,
-        )
-        if not found:
-            # pylint: disable=logging-format-interpolation
-            logger.warning(
-                'Please add "%s" to your search PATH so the `%s` can be found. 2 options: \n'
-                '    1. Run "set PATH=%%PATH%%;%s" or "$env:path += \'%s\'" for PowerShell. '
-                "This is good for the current command session.\n"
-                "    2. Update system PATH environment variable by following "
-                '"Control Panel->System->Advanced->Environment Variables", and re-open the command window. '
-                "You only need to do it once",
-                install_dir, cli, install_dir, install_dir,
-            )
-    else:
-        if not which(cli):
-            logger.warning(
-                "Please ensure that %s is in your search PATH, so the `%s` command can be found.",
-                install_dir,
-                cli,
-            )
-    return install_location
+    return download_binary(install_location, install_dir, file_url, system, cli)
 
 
 def install_kubectl(cmd, client_version="latest", install_location=None, source_url=None):
@@ -745,6 +696,11 @@ def install_kubectl(cmd, client_version="latest", install_location=None, source_
             f"Proxy server ({system}) does not exist on the cluster."
         )
 
+    return download_binary(install_location, install_dir, file_url, system, cli)
+
+
+def download_binary(install_location, install_dir, file_url, system, cli):
+
     logger.info('Downloading client to "%s" from "%s"', install_location, file_url)
     try:
         urlretrieve(file_url, install_location)
@@ -781,3 +737,4 @@ def install_kubectl(cmd, client_version="latest", install_location=None, source_
                 install_dir,
                 cli,
             )
+    return install_location
