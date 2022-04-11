@@ -149,7 +149,6 @@ def delete_management_cluster(cmd, yes=False):  # pylint: disable=unused-argumen
         "capi-kubeadm-bootstrap-system",
         "capi-kubeadm-control-plane-system",
         "capi-system",
-        "capi-webhook-system",
         "capz-system",
         "cert-manager",
     ]
@@ -542,18 +541,22 @@ def find_management_cluster():
     match = check_cmd(cmd, r"Kubernetes .*?is running")
     if match is None:
         raise ResourceNotFoundError("No accessible Kubernetes cluster found")
-    cmd = ["kubectl", "get", "pods", "--namespace", "capz-system"]
+    check_pods_status_by_namespace("capz-system", "No CAPZ installation found", "capz-controller-manager")
+    check_pods_status_by_namespace("capi-system", "No CAPI installation found", "capi-controller-manager")
+    check_pods_status_by_namespace("capi-kubeadm-bootstrap-system",
+                                   "No CAPI Kubeadm Bootstrap installation found",
+                                   "capi-kubeadm-bootstrap-controller-manager")
+    check_pods_status_by_namespace("capi-kubeadm-control-plane-system",
+                                   "No CAPI Kubeadm Control Plane installation found",
+                                   "capi-kubeadm-control-plane-controller-manager")
+
+
+def check_pods_status_by_namespace(namespace, error_message, pod_name):
+    cmd = ["kubectl", "get", "pods", "--namespace", namespace]
     try:
-        match = check_cmd(cmd, r"capz-controller-manager-.+?Running")
+        match = check_cmd(cmd, fr"{pod_name}-.+?Running")
         if match is None:
-            raise ResourceNotFoundError("No CAPZ installation found")
-    except subprocess.CalledProcessError as err:
-        logger.error(err)
-    cmd = ["kubectl", "get", "pods", "--namespace", "capi-webhook-system"]
-    try:
-        match = check_cmd(cmd, r"capz-controller-manager-.+?Running")
-        if match is None:
-            raise ResourceNotFoundError("No CAPZ installation found")
+            raise ResourceNotFoundError(error_message)
     except subprocess.CalledProcessError as err:
         logger.error(err)
 
