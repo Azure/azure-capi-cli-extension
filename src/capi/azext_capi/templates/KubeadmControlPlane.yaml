@@ -1,26 +1,28 @@
 ---
 kind: KubeadmControlPlane
-apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
+apiVersion: controlplane.cluster.x-k8s.io/v1beta1
 metadata:
   name: {{ CLUSTER_NAME }}-control-plane
 spec:
   replicas: {{ CONTROL_PLANE_MACHINE_COUNT or 1 }}
-  infrastructureTemplate:
-    kind: AzureMachineTemplate
-    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
-    name: {{ CLUSTER_NAME }}-control-plane
+  machineTemplate:
+    infrastructureRef:
+      apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+      kind: AzureMachineTemplate
+      name: {{ CLUSTER_NAME }}-control-plane
   kubeadmConfigSpec:
-    useExperimentalRetryJoin: true
     initConfiguration:
       nodeRegistration:
         name: {% raw %}'{{ ds.meta_data["local_hostname"] }}'{% endraw %}
         kubeletExtraArgs:
+          azure-container-registry-config: /etc/kubernetes/azure.json
           cloud-provider: {% if EXTERNAL_CLOUD_PROVIDER %}external{% else %}azure{% endif %}
           cloud-config: /etc/kubernetes/azure.json
     joinConfiguration:
       nodeRegistration:
         name: {% raw %}'{{ ds.meta_data["local_hostname"] }}'{% endraw %}
         kubeletExtraArgs:
+          azure-container-registry-config: /etc/kubernetes/azure.json
           cloud-provider: {% if EXTERNAL_CLOUD_PROVIDER %}external{% else %}azure{% endif %}
           cloud-config: /etc/kubernetes/azure.json
     clusterConfiguration:
@@ -72,8 +74,8 @@ spec:
           filesystem: ext4
           device: /dev/disk/azure/scsi1/lun0
           extraOpts:
-            - "-E"
-            - "lazy_itable_init=1,lazy_journal_init=1"
+            - -E
+            - lazy_itable_init=1,lazy_journal_init=1
         - label: ephemeral0
           filesystem: ext4
           device: ephemeral0.1
