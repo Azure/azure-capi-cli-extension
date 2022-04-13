@@ -1,12 +1,11 @@
 ---
 kind: AzureMachineTemplate
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 metadata:
   name: {{ CLUSTER_NAME }}-{{ SUFFIX }}
 spec:
   template:
     spec:
-      location: {{ AZURE_LOCATION }}
       vmSize: {{ AZURE_CONTROL_PLANE_MACHINE_TYPE or "Standard_D2s_v3" }}
       osDisk:
         osType: {% if WINDOWS %}Windows{% else %}Linux{% endif %}
