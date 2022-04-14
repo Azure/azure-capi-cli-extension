@@ -248,9 +248,11 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         "AZURE_SSH_PUBLIC_KEY_B64": ssh_public_key,
         "AZURE_VNET_NAME": vnet_name,
         "CLUSTER_NAME": capi_name,
+        "CONTROL_PLANE_MACHINE_COUNT": control_plane_machine_count,
         "KUBERNETES_VERSION": kubernetes_version,
         "EPHEMERAL": ephemeral_disks,
         "WINDOWS": windows,
+        "WORKER_MACHINE_COUNT": node_machine_count,
         "NODEPOOL_TYPE": "machinepool" if machinepool else "machinedeployment",
     }
     filename = capi_name + ".yaml"
