@@ -6,7 +6,7 @@ metadata:
 spec:
   template:
     spec:
-      vmSize: {{ AZURE_CONTROL_PLANE_MACHINE_TYPE or "Standard_D2s_v3" }}
+      vmSize: {{ AZURE_CONTROL_PLANE_MACHINE_TYPE }}
       osDisk:
         osType: {% if WINDOWS %}Windows{% else %}Linux{% endif %}
         diskSizeGB: 128

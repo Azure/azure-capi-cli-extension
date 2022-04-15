@@ -5,11 +5,11 @@ metadata:
   name: {{ CLUSTER_NAME }}-{{ SUFFIX }}
 spec:
   clusterName: {{ CLUSTER_NAME }}
-  replicas: {{ WORKER_MACHINE_COUNT or 3 }}
+  replicas: {{ WORKER_MACHINE_COUNT }}
   template:
     spec:
       clusterName: {{ CLUSTER_NAME }}
-      version: {{ KUBERNETES_VERSION or "1.22.8" }}
+      version: {{ KUBERNETES_VERSION }}
       bootstrap:
         configRef:
           name: {{ CLUSTER_NAME }}-{{ SUFFIX }}

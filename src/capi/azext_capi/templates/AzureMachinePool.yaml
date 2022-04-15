@@ -6,7 +6,7 @@ metadata:
 spec:
   location: {{ AZURE_LOCATION }}
   template:
-    vmSize: {{ AZURE_NODE_MACHINE_TYPE or "Standard_D2s_v3" }}
+    vmSize: {{ AZURE_NODE_MACHINE_TYPE }}
     osDisk:
       osType: Linux
       diskSizeGB: 30
