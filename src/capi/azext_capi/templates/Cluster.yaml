@@ -4,7 +4,13 @@ kind: Cluster
 metadata:
   name: {{ CLUSTER_NAME }}
   labels:
-    cni: {% if WINDOWS %}flannel-windows{% else %}calico{% endif %}
+    {%- if WINDOWS %}
+    cni: calico
+    csi-proxy: enabled
+    windows: enabled
+    {%- else %}
+    cni:calico
+    {%- endif %}
 spec:
   clusterNetwork:
     pods:
