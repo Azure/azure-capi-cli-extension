@@ -101,7 +101,24 @@ Where do you want to create a management cluster?
                     raise UnclassifiedUserFault("Couldn't create kind management cluster") from err
         else:
             return
+        _create_azure_identity_secret(cmd)
         _install_capz_components(cmd)
+
+
+def _create_azure_identity_secret(cmd):
+    secret_name = os.environ["AZURE_CLUSTER_IDENTITY_SECRET_NAME"]
+    secret_namespace = os.environ["AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE"]
+    azure_client_secret = os.environ["AZURE_CLIENT_SECRET"]
+    with Spinner(cmd, "Creating Cluster Identity Secret", "✓ Created Cluster Indentity Secret"):
+        command = ["kubectl", "create", "secret", "generic", secret_name, "--from-literal",
+                   f"clientSecret={azure_client_secret}", "--namespace", secret_namespace]
+        try:
+            # if --verbose, don't capture stderr
+            stderr = None if is_verbose() else subprocess.STDOUT
+            output = subprocess.check_output(command, universal_newlines=True, stderr=stderr)
+            logger.info("%s returned:\n%s", " ".join(command), output)
+        except subprocess.CalledProcessError as err:
+            raise UnclassifiedUserFault("Can't create Cluster Identity Secret") from err
 
 
 def _install_capz_components(cmd):
@@ -234,33 +251,6 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         windows=False,
         output_path=None,
         yes=False):
-    # Generate the cluster configuration
-    env = Environment(loader=PackageLoader("azext_capi", "templates"), auto_reload=False)
-    logger.debug("Available templates: %s", env.list_templates())
-    template = env.get_template("base.jinja")
-
-    args = {
-        "AZURE_CONTROL_PLANE_MACHINE_TYPE": control_plane_machine_type,
-        "AZURE_LOCATION": location,
-        "AZURE_NODE_MACHINE_TYPE": node_machine_type,
-        "AZURE_RESOURCE_GROUP": resource_group_name,
-        "AZURE_SUBSCRIPTION_ID": subscription_id,
-        "AZURE_SSH_PUBLIC_KEY_B64": ssh_public_key,
-        "AZURE_VNET_NAME": vnet_name,
-        "CLUSTER_NAME": capi_name,
-        "CONTROL_PLANE_MACHINE_COUNT": control_plane_machine_count,
-        "KUBERNETES_VERSION": kubernetes_version,
-        "EPHEMERAL": ephemeral_disks,
-        "WINDOWS": windows,
-        "WORKER_MACHINE_COUNT": node_machine_count,
-        "NODEPOOL_TYPE": "machinepool" if machinepool else "machinedeployment",
-    }
-    filename = capi_name + ".yaml"
-    end_msg = f'✓ Generated workload cluster configuration at "{filename}"'
-    with Spinner(cmd, "Generating workload cluster configuration", end_msg):
-        manifest = template.render(args)
-        with open(filename, "w", encoding="utf-8") as manifest_file:
-            manifest_file.write(manifest)
 
     # Check if the RG already exists and that it's consistent with the location
     # specified. CAPZ will actually create (and delete) the RG if needed.
@@ -287,7 +277,49 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
     if not yes and not prompt_y_n(msg, default="n"):
         return
 
+    # Set Azure Identity Secret enviroment variables. This will be used in init_environment
+    identity_secret_name = "AZURE_CLUSTER_IDENTITY_SECRET_NAME"
+    indentity_secret_namespace = "AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE"
+    cluster_identity_name = "CLUSTER_IDENTITY_NAME"
+    os.environ[identity_secret_name] = os.environ.get(identity_secret_name, "cluster-identity-secret")
+    os.environ[indentity_secret_namespace] = os.environ.get(indentity_secret_namespace, "default")
+    os.environ[cluster_identity_name] = os.environ.get(cluster_identity_name, "cluster-identity")
+
     init_environment(cmd, not yes)
+
+    # Generate the cluster configuration
+    env = Environment(loader=PackageLoader("azext_capi", "templates"), auto_reload=False)
+    logger.debug("Available templates: %s", env.list_templates())
+    template = env.get_template("base.jinja")
+
+    args = {
+        "AZURE_CONTROL_PLANE_MACHINE_TYPE": control_plane_machine_type,
+        "AZURE_LOCATION": location,
+        "AZURE_NODE_MACHINE_TYPE": node_machine_type,
+        "AZURE_RESOURCE_GROUP": resource_group_name,
+        "AZURE_SUBSCRIPTION_ID": subscription_id,
+        "AZURE_SSH_PUBLIC_KEY_B64": ssh_public_key,
+        "AZURE_VNET_NAME": vnet_name,
+        "CLUSTER_NAME": capi_name,
+        "CONTROL_PLANE_MACHINE_COUNT": control_plane_machine_count,
+        "KUBERNETES_VERSION": kubernetes_version,
+        "EPHEMERAL": ephemeral_disks,
+        "WINDOWS": windows,
+        "WORKER_MACHINE_COUNT": node_machine_count,
+        "NODEPOOL_TYPE": "machinepool" if machinepool else "machinedeployment",
+        "CLUSTER_IDENTITY_NAME": os.environ["CLUSTER_IDENTITY_NAME"],
+        "AZURE_TENANT_ID": os.environ["AZURE_TENANT_ID"],
+        "AZURE_CLIENT_ID": os.environ["AZURE_CLIENT_ID"],
+        "AZURE_CLUSTER_IDENTITY_SECRET_NAME": os.environ["AZURE_CLUSTER_IDENTITY_SECRET_NAME"],
+        "AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE": os.environ["AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE"],
+    }
+
+    filename = capi_name + ".yaml"
+    end_msg = f'✓ Generated workload cluster configuration at "{filename}"'
+    with Spinner(cmd, "Generating workload cluster configuration", end_msg):
+        manifest = template.render(args)
+        with open(filename, "w", encoding="utf-8") as manifest_file:
+            manifest_file.write(manifest)
 
     # Apply the cluster configuration.
     attempts, delay = 100, 3
