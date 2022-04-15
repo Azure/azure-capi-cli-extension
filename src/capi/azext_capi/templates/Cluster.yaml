@@ -9,7 +9,7 @@ metadata:
     csi-proxy: enabled
     windows: enabled
     {%- else %}
-    cni:calico
+    cni: calico
     {%- endif %}
 spec:
   clusterNetwork:
