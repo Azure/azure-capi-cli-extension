@@ -9,11 +9,14 @@ from unittest.mock import MagicMock, Mock, patch
 
 from azure.cli.testsdk.scenario_tests import AllowLargeResponse
 from azure.cli.core.azclierror import InvalidArgumentValueError
+from azure.cli.core.azclierror import UnclassifiedUserFault
 from azure.cli.core.azclierror import RequiredArgumentMissingError
 from azure.cli.testsdk import (ScenarioTest, ResourceGroupPreparer)
 from knack.prompting import NoTTYException
 from msrestazure.azure_exceptions import CloudError
 
+
+from azext_capi.custom import try_command_with_spinner
 
 TEST_DIR = os.path.abspath(os.path.join(os.path.abspath(__file__), '..'))
 
@@ -125,6 +128,20 @@ class CapiScenarioTest(ScenarioTest):
                 ])
                 self.assertEqual(mock.call_count, 1)
                 self.assertEqual(mock.call_args_list[0][0][0][:3], ["clusterctl", "upgrade", "apply"])
+
+
+class CommandGenericTest(unittest.TestCase):
+
+    @patch('azext_capi.custom.Spinner')
+    def test_try_command_with_spinner(self, mock_spinner):
+        cmd = Mock()
+        with patch('subprocess.check_output') as mock:
+            try_command_with_spinner(cmd, ["fake-command"], "begin", "end", "error")
+            mock.assert_called_once()
+        error_msg = "fake error"
+        with self.assertRaises(UnclassifiedUserFault) as cm:
+            try_command_with_spinner(cmd, ["fake-command"], "begin", "end", error_msg)
+        self.assertEquals(cm.exception.error_msg, error_msg)
 
 
 AZ_CAPI_LIST_JSON = """\
