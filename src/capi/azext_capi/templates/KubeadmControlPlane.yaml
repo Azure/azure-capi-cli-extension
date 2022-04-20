@@ -31,30 +31,30 @@ spec:
         extraArgs:
           cloud-provider: azure
           cloud-config: /etc/kubernetes/azure.json
+          {%- if WINDOWS %}
+          feature-gates: WindowsHostProcessContainers=true
+          {%- endif %}
         extraVolumes:
-          - hostPath: /etc/kubernetes/azure.json
-            mountPath: /etc/kubernetes/azure.json
-            name: cloud-config
-            readOnly: true
+        - hostPath: /etc/kubernetes/azure.json
+          mountPath: /etc/kubernetes/azure.json
+          name: cloud-config
+          readOnly: true
       controllerManager:
         extraArgs:
           cloud-provider: {% if EXTERNAL_CLOUD_PROVIDER %}external{% else %}azure{% endif %}
           cloud-config: /etc/kubernetes/azure.json
-          {%- if WINDOWS %}
-          allocate-node-cidrs: "true"
-          configure-cloud-routes: "false"
-          {%- else %}
           allocate-node-cidrs: "false"
-          {%- endif %}
           cluster-name: {{ CLUSTER_NAME }}
         extraVolumes:
-          - hostPath: /etc/kubernetes/azure.json
-            mountPath: /etc/kubernetes/azure.json
-            name: cloud-config
-            readOnly: true
+        - hostPath: /etc/kubernetes/azure.json
+          mountPath: /etc/kubernetes/azure.json
+          name: cloud-config
+          readOnly: true
       etcd:
         local:
           dataDir: /var/lib/etcddisk/etcd
+          extraArgs:
+            quota-backend-bytes: "8589934592"  
     files:
     - contentFrom:
         secret:
@@ -65,21 +65,21 @@ spec:
       permissions: "0644"
     diskSetup:
       partitions:
-        - device: /dev/disk/azure/scsi1/lun0
-          tableType: gpt
-          layout: true
-          overwrite: false
+      - device: /dev/disk/azure/scsi1/lun0
+        tableType: gpt
+        layout: true
+        overwrite: false
       filesystems:
-        - label: etcd_disk
-          filesystem: ext4
-          device: /dev/disk/azure/scsi1/lun0
-          extraOpts:
-            - -E
-            - lazy_itable_init=1,lazy_journal_init=1
-        - label: ephemeral0
-          filesystem: ext4
-          device: ephemeral0.1
-          replaceFS: ntfs
+      - label: etcd_disk
+        filesystem: ext4
+        device: /dev/disk/azure/scsi1/lun0
+        extraOpts:
+          - -E
+          - lazy_itable_init=1,lazy_journal_init=1
+      - label: ephemeral0
+        filesystem: ext4
+        device: ephemeral0.1
+        replaceFS: ntfs
     mounts:
       - - LABEL=etcd_disk
         - /var/lib/etcddisk

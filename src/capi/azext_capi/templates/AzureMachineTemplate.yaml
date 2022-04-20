@@ -3,12 +3,21 @@ kind: AzureMachineTemplate
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 metadata:
   name: {{ CLUSTER_NAME }}-{{ SUFFIX }}
+  {%- if WINDOWS and SUFFIX == "md-win"%}
+  annotations:
+    runtime: containerd
+  {%- endif %}
 spec:
   template:
+    {%- if WINDOWS and SUFFIX == "md-win" %}
+    metadata:
+      annotations:
+        runtime: containerd
+    {%- endif %}
     spec:
       vmSize: {{ AZURE_CONTROL_PLANE_MACHINE_TYPE }}
       osDisk:
-        osType: {% if WINDOWS %}Windows{% else %}Linux{% endif %}
+        osType: {% if WINDOWS and SUFFIX == "md-win"%}Windows{% else %}Linux{% endif %}
         diskSizeGB: 128
         managedDisk:
           storageAccountType: {% if EPHEMERAL %}Standard_LRS{% else %}Premium_LRS{% endif %}

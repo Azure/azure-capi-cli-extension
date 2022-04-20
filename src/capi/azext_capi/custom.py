@@ -363,9 +363,33 @@ clusterctl get kubeconfig {capi_name}
     logger.warning('✓ Workload access configuration written to "%s"', workload_cfg)
 
     # Install CNI
-    attempts, delay = 100, 3
     calico_manifest = "https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/master/templates/addons/calico.yaml"  # pylint: disable=line-too-long
-    with Spinner(cmd, "Deploying Container Network Interface (CNI) support", "✓ Deployed CNI to workload cluster"):
+    spinner_enter_message = "Deploying Container Network Interface (CNI) support"
+    spinner_exit_message = "✓ Deployed CNI to workload cluster"
+    error_message = "Couldn't install CNI after waiting 5 minutes."
+
+    apply_calico_manifest(cmd, calico_manifest, workload_cfg, spinner_enter_message,
+                          spinner_exit_message, error_message)
+
+    if windows:
+        calico_manifest = "https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/main/templates/addons/windows/calico/calico.yaml"  # pylint: disable=line-too-long
+        spinner_enter_message = "Deploying Windows Calico support"
+        spinner_exit_message = "✓ Deployed Windows Calico support to worload cluster"
+        error_message = "Couldn't install Windows Calico support after waiting 5 minutes."
+        apply_calico_manifest(cmd, calico_manifest, workload_cfg, spinner_enter_message,
+                              spinner_exit_message, error_message)
+
+    # Wait for all nodes to be ready before returning
+    with Spinner(cmd, "Waiting for workload cluster nodes to be ready", "✓ Workload cluster is ready"):
+        wait_for_ready(workload_cfg)
+
+    return show_workload_cluster(cmd, capi_name)
+
+
+def apply_calico_manifest(cmd, calico_manifest, workload_cfg,
+                          spinner_enter_message, spinner_exit_message, error_message):
+    attempts, delay = 100, 3
+    with Spinner(cmd, spinner_enter_message, spinner_exit_message):
         command = ["kubectl", "apply", "-f", calico_manifest, "--kubeconfig", workload_cfg]
         # if --verbose, don't capture stderr
         stderr = None if is_verbose() else subprocess.STDOUT
@@ -377,14 +401,7 @@ clusterctl get kubeconfig {capi_name}
                 logger.info(err)
                 time.sleep(delay)
         else:
-            msg = "Couldn't install CNI after waiting 5 minutes."
-            raise ResourceNotFoundError(msg)
-
-    # Wait for all nodes to be ready before returning
-    with Spinner(cmd, "Waiting for workload cluster nodes to be ready", "✓ Workload cluster is ready"):
-        wait_for_ready(workload_cfg)
-
-    return show_workload_cluster(cmd, capi_name)
+            raise ResourceNotFoundError(error_message)
 
 
 def find_nodes(kubeconfig):
