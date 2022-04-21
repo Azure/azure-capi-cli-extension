@@ -494,8 +494,19 @@ def check_prereqs(cmd, install=False):
 
     # Check for required environment variables
     # TODO: remove this when AAD Pod Identity becomes the default
-    for var in ["AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_SUBSCRIPTION_ID", "AZURE_TENANT_ID"]:
-        check_environment_var(var)
+    check_enviroment_variables()
+
+
+def check_enviroment_variables():
+    required_env_vars = ["AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_SUBSCRIPTION_ID", "AZURE_TENANT_ID"]
+    missing_env_vars = [v for v in required_env_vars if not check_environment_var(v)]
+    missing_vars_len = len(missing_env_vars)
+    if missing_vars_len != 0:
+        err_msg = f"Required environment variable {missing_env_vars[0]} was not found."
+        if missing_vars_len != 1:
+            missing_env_vars = ", ".join(missing_env_vars)
+            err_msg = f"Required environment variables {missing_env_vars} were not found."
+        raise RequiredArgumentMissingError(err_msg)
 
 
 class Spinner():
@@ -566,12 +577,13 @@ def check_environment_var(var):
     else:
         try:
             val = os.environ[var]
-        except KeyError as err:
-            raise RequiredArgumentMissingError(f"Required environment variable {err} was not found.") from err
+        except KeyError:
+            return False
         # Set the base64-encoded variable as a convenience
         val = base64.b64encode(val.encode("utf-8")).decode("ascii")
         os.environ[var_b64] = val
         logger.info("Set environment variable %s from %s", var_b64, var)
+    return True
 
 
 def find_management_cluster_retry(cmd, delay=3):
