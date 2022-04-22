@@ -73,37 +73,40 @@ Where do you want to create a management cluster?
             choice_index = 0
         cluster_name = "capi-manager"
         if choice_index == 0:
-            with Spinner(cmd, "Creating Azure resource group", "✓ Created Azure resource group"):
-                command = ["az", "group", "create", "-l", "southcentralus", "--name", cluster_name]
+            command = ["az", "group", "create", "-l", "southcentralus", "--name", cluster_name]
+            try_command_with_spinner(cmd, command, "Creating Azure resource group", "✓ Created Azure resource group",
+                                     "Couldn't create Azure resource group")
+            command = ["az", "aks", "create", "-g", cluster_name, "--name", cluster_name, "--generate-ssh-keys",
+                       "--network-plugin", "azure", "--network-policy", "calico"]
+            try_command_with_spinner(cmd, command, "Creating Azure management cluster with AKS",
+                                     "✓ Created AKS management cluster", "Couldn't create AKS management cluster")
+            with Spinner(cmd, "Obtaining AKS credentials", "✓ Obtained AKS credentials"):
+                command = ["az", "aks", "get-credentials", "-g", cluster_name, "--name", cluster_name]
                 try:
-                    output = subprocess.check_output(command, universal_newlines=True)
-                    logger.info("%s returned:\n%s", " ".join(command), output)
+                    subprocess.check_call(command, universal_newlines=True)
                 except subprocess.CalledProcessError as err:
-                    raise UnclassifiedUserFault("Couldn't create Azure resource group") from err
-            with Spinner(cmd, "Creating Azure management cluster with AKS", "✓ Created AKS management cluster"):
-                command = ["az", "aks", "create", "-g", cluster_name, "--name", cluster_name]
-                try:
-                    output = subprocess.check_output(command, universal_newlines=True)
-                    logger.info("%s returned:\n%s", " ".join(command), output)
-                except subprocess.CalledProcessError as err:
-                    raise UnclassifiedUserFault("Couldn't create AKS management cluster") from err
+                    raise UnclassifiedUserFault("Couldn't get credentials for AKS management cluster") from err
         elif choice_index == 1:
             check_kind(cmd, install=not prompt)
             begin_msg = f'Creating local management cluster "{cluster_name}" with kind'
             end_msg = f'✓ Created local management cluster "{cluster_name}"'
-            with Spinner(cmd, begin_msg, end_msg):
-                command = ["kind", "create", "cluster", "--name", cluster_name]
-                try:
-                    # if --verbose, don't capture stderr
-                    stderr = None if is_verbose() else subprocess.STDOUT
-                    output = subprocess.check_output(command, universal_newlines=True, stderr=stderr)
-                    logger.info("%s returned:\n%s", " ".join(command), output)
-                except subprocess.CalledProcessError as err:
-                    raise UnclassifiedUserFault("Couldn't create kind management cluster") from err
+            command = ["kind", "create", "cluster", "--name", cluster_name]
+            try_command_with_spinner(cmd, command, begin_msg, end_msg, "Couldn't create kind management cluster")
         else:
             return
         _create_azure_identity_secret(cmd)
         _install_capz_components(cmd)
+
+
+def try_command_with_spinner(cmd, command, spinner_begin_msg, spinner_end_msg, error_msg):
+    with Spinner(cmd, spinner_begin_msg, spinner_end_msg):
+        try:
+            # if --verbose, don't capture stderr
+            stderr = None if is_verbose() else subprocess.STDOUT
+            output = subprocess.check_output(command, universal_newlines=True, stderr=stderr)
+            logger.info("%s returned:\n%s", " ".join(command), output)
+        except (subprocess.CalledProcessError, FileNotFoundError) as err:
+            raise UnclassifiedUserFault(error_msg) from err
 
 
 def _create_azure_identity_secret(cmd):
@@ -627,6 +630,12 @@ def check_pods_status_by_namespace(namespace, error_message, pod_name):
         if match is None:
             raise ResourceNotFoundError(error_message)
     except subprocess.CalledProcessError as err:
+        cmd = ["kubectl", "get", "pods", "-A", namespace]
+        try:
+            output = subprocess.check_output(cmd, universal_newlines=True, stderr=subprocess.STDOUT)
+            logger.debug(output)
+        except subprocess.CalledProcessError as err:
+            logger.error(err)
         logger.error(err)
 
 
