@@ -27,7 +27,8 @@ from azure.cli.core.azclierror import RequiredArgumentMissingError
 from azure.cli.core.azclierror import ResourceNotFoundError
 from azure.cli.core.azclierror import UnclassifiedUserFault
 from azure.cli.core.azclierror import ValidationError
-from jinja2 import Environment, PackageLoader
+from jinja2 import Environment, PackageLoader, StrictUndefined
+from jinja2.exceptions import UndefinedError
 from knack.log import get_logger
 from knack.prompting import prompt_choice_list, prompt_y_n
 from msrestazure.azure_exceptions import CloudError
@@ -245,6 +246,7 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         kubernetes_version=os.environ.get("AZURE_KUBERNETES_VERSION", "1.22.8"),
         subscription_id=os.environ.get("AZURE_SUBSCRIPTION_ID"),
         ssh_public_key=os.environ.get("AZURE_SSH_PUBLIC_KEY_B64", ""),
+        external_cloud_provider=False,
         vnet_name=None,
         machinepool=False,
         ephemeral_disks=False,
@@ -288,7 +290,7 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
     init_environment(cmd, not yes)
 
     # Generate the cluster configuration
-    env = Environment(loader=PackageLoader("azext_capi", "templates"), auto_reload=False)
+    env = Environment(loader=PackageLoader("azext_capi", "templates"), auto_reload=False, undefined=StrictUndefined)
     logger.debug("Available templates: %s", env.list_templates())
     template = env.get_template("base.jinja")
 
@@ -302,6 +304,7 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         "AZURE_VNET_NAME": vnet_name,
         "CLUSTER_NAME": capi_name,
         "CONTROL_PLANE_MACHINE_COUNT": control_plane_machine_count,
+        "EXTERNAL_CLOUD_PROVIDER": external_cloud_provider,
         "KUBERNETES_VERSION": kubernetes_version,
         "EPHEMERAL": ephemeral_disks,
         "WINDOWS": windows,
@@ -317,9 +320,12 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
     filename = capi_name + ".yaml"
     end_msg = f'✓ Generated workload cluster configuration at "{filename}"'
     with Spinner(cmd, "Generating workload cluster configuration", end_msg):
-        manifest = template.render(args)
-        with open(filename, "w", encoding="utf-8") as manifest_file:
-            manifest_file.write(manifest)
+        try:
+            manifest = template.render(args)
+            with open(filename, "w", encoding="utf-8") as manifest_file:
+                manifest_file.write(manifest)
+        except UndefinedError as err:
+            raise RequiredArgumentMissingError(f"Could not generate workload cluster configuration. {err}") from err
 
     # Apply the cluster configuration.
     attempts, delay = 100, 3

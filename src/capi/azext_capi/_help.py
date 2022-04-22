@@ -32,6 +32,8 @@ parameters:
   - name: --ephemeral-disks -e
     type: string
     short-summary: Use ephemeral disks
+  - name: --external-cloud-provider
+    type: bool
   - name: --kubernetes-version -k
     type: string
     short-summary: Version of Kubernetes to use
