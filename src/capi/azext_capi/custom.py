@@ -25,6 +25,7 @@ from azure.cli.core.azclierror import FileOperationError
 from azure.cli.core.azclierror import InvalidArgumentValueError
 from azure.cli.core.azclierror import RequiredArgumentMissingError
 from azure.cli.core.azclierror import ResourceNotFoundError
+from azure.core.exceptions import ResourceNotFoundError as ResourceNotFoundException
 from azure.cli.core.azclierror import UnclassifiedUserFault
 from azure.cli.core.azclierror import ValidationError
 from jinja2 import Environment, PackageLoader, StrictUndefined
@@ -236,6 +237,18 @@ def update_management_cluster(cmd, yes=False):
         raise UnclassifiedUserFault("Couldn't upgrade management cluster") from err
 
 
+def create_resource_group(cmd, rg_name, location, yes=False):
+    msg = f"Do you want to create, an Azure resource group named {rg_name} located: {location}?"
+    if yes or prompt_y_n(msg, default="n"):
+        command = ["az", "group", "create", "-l", location, "-n", rg_name]
+        begin_msg = f"Creating Resource Group: {rg_name}"
+        end_msg = f"✓ Created Resource Group: {rg_name}"
+        err_msg = f"Could not create resource group {rg_name}"
+        try_command_with_spinner(cmd, command, begin_msg, end_msg, err_msg)
+        return True
+    return False
+
+
 # pylint: disable=inconsistent-return-statements
 def create_workload_cluster(  # pylint: disable=unused-argument,too-many-arguments,too-many-locals,too-many-statements
         cmd,
@@ -271,13 +284,13 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         elif location != rg.location:
             msg = "--location is {}, but the resource group {} already exists in {}."
             raise InvalidArgumentValueError(msg.format(location, resource_group_name, rg.location))
-    except CloudError as err:
+    except (CloudError, ResourceNotFoundException) as err:
         if 'could not be found' not in err.message:
             raise
         if not location:
             msg = "--location is required to create the resource group {}."
             raise RequiredArgumentMissingError(msg.format(resource_group_name)) from err
-
+        logger.warning("Could not find an Azure resource group, CAPZ will create one for you")
     msg = f'Create the Kubernetes cluster "{capi_name}" in the Azure resource group "{resource_group_name}"?'
     if not yes and not prompt_y_n(msg, default="n"):
         return

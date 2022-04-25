@@ -3,6 +3,7 @@
 # Licensed under the MIT License. See License.txt in the project root for license information.
 # --------------------------------------------------------------------------------------------
 
+import subprocess
 import os
 import unittest
 from unittest.mock import MagicMock, Mock, patch
@@ -16,7 +17,7 @@ from knack.prompting import NoTTYException
 from msrestazure.azure_exceptions import CloudError
 
 
-from azext_capi.custom import try_command_with_spinner
+from azext_capi.custom import create_resource_group, try_command_with_spinner
 
 TEST_DIR = os.path.abspath(os.path.join(os.path.abspath(__file__), '..'))
 
@@ -142,6 +143,19 @@ class CommandGenericTest(unittest.TestCase):
         with self.assertRaises(UnclassifiedUserFault) as cm:
             try_command_with_spinner(cmd, ["fake-command"], "begin", "end", error_msg)
         self.assertEquals(cm.exception.error_msg, error_msg)
+
+    @patch('azext_capi.custom.try_command_with_spinner')
+    def test_create_resource_group(self, mock_try_command):
+        # Test created new resource group
+        cmd = Mock()
+        group = "fake-resource-group"
+        location = "fake-location"
+        result = create_resource_group(cmd, group, location, True)
+        self.assertTrue(result)
+        # Test Error creating resource group
+        mock_try_command.side_effect = subprocess.CalledProcessError(3, ['fakecommand'])
+        with self.assertRaises(subprocess.CalledProcessError):
+            create_resource_group(cmd, group, location, True)
 
 
 AZ_CAPI_LIST_JSON = """\
