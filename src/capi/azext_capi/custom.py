@@ -55,47 +55,18 @@ def init_environment(cmd, prompt=True):
         if str(err) == "No Cluster API installation found":
             _install_capz_components(cmd)
     except subprocess.CalledProcessError:
-        if prompt:
-            choices = ["azure - a management cluster in the Azure cloud",
-                       "local - a local Docker container-based management cluster",
-                       "exit - don't create a management cluster"]
-            prompt = """
+        pre_prompt = """
 No Kubernetes cluster was found using the default configuration.
 
 Cluster API needs a "management cluster" to run its components.
 Learn more from the Cluster API Book:
 https://cluster-api.sigs.k8s.io/user/concepts.html
-
-Where do you want to create a management cluster?
 """
-            choice_index = prompt_choice_list(prompt, choices)
-        else:
-            choice_index = 0
-        cluster_name = "capi-manager"
-        if choice_index == 0:
-            command = ["az", "group", "create", "-l", "southcentralus", "--name", cluster_name]
-            try_command_with_spinner(cmd, command, "Creating Azure resource group", "✓ Created Azure resource group",
-                                     "Couldn't create Azure resource group")
-            command = ["az", "aks", "create", "-g", cluster_name, "--name", cluster_name, "--generate-ssh-keys",
-                       "--network-plugin", "azure", "--network-policy", "calico"]
-            try_command_with_spinner(cmd, command, "Creating Azure management cluster with AKS",
-                                     "✓ Created AKS management cluster", "Couldn't create AKS management cluster")
-            with Spinner(cmd, "Obtaining AKS credentials", "✓ Obtained AKS credentials"):
-                command = ["az", "aks", "get-credentials", "-g", cluster_name, "--name", cluster_name]
-                try:
-                    subprocess.check_call(command, universal_newlines=True)
-                except subprocess.CalledProcessError as err:
-                    raise UnclassifiedUserFault("Couldn't get credentials for AKS management cluster") from err
-        elif choice_index == 1:
-            check_kind(cmd, install=not prompt)
-            begin_msg = f'Creating local management cluster "{cluster_name}" with kind'
-            end_msg = f'✓ Created local management cluster "{cluster_name}"'
-            command = ["kind", "create", "cluster", "--name", cluster_name]
-            try_command_with_spinner(cmd, command, begin_msg, end_msg, "Couldn't create kind management cluster")
-        else:
-            return
+        if not create_new_management_cluster(cmd, prompt, pre_prompt):
+            return False
         _create_azure_identity_secret(cmd)
         _install_capz_components(cmd)
+    return True
 
 
 def try_command_with_spinner(cmd, command, spinner_begin_msg, spinner_end_msg, error_msg):
@@ -122,7 +93,7 @@ def _create_azure_identity_secret(cmd):
             output = subprocess.check_output(command, universal_newlines=True, stderr=stderr)
             logger.info("%s returned:\n%s", " ".join(command), output)
         except subprocess.CalledProcessError as err:
-            raise UnclassifiedUserFault("Can't create Cluster Identity Secret") from err
+            raise UnclassifiedUserFault(f"Can't create Cluster Identity Secret \n{err.stdout}") from err
 
 
 def _install_capz_components(cmd):
@@ -136,21 +107,107 @@ def _install_capz_components(cmd):
             output = subprocess.check_output(command, universal_newlines=True, stderr=stderr)
             logger.info("%s returned:\n%s", " ".join(command), output)
         except subprocess.CalledProcessError as err:
-            raise UnclassifiedUserFault("Can't locate a Kubernetes cluster") from err
+            raise UnclassifiedUserFault("Couldn't install CAPZ components in current cluster") from err
+
+
+def run_shell_command(command):
+    # if --verbose, don't capture stderr
+    stderr = None if is_verbose() else subprocess.STDOUT
+    output = subprocess.check_output(command, universal_newlines=True, stderr=stderr)
+    logger.info("%s returned:\n%s", " ".join(command), output)
+    return output
+
+
+def find_kubectl_current_context():
+    command = ["kubectl", "config", "current-context"]
+    try:
+        output = run_shell_command(command)
+        output = output.strip()
+        return output
+    except subprocess.CalledProcessError:
+        return None
+
+
+def find_cluster_in_current_context(context_name):
+    command = ["kubectl", "config", "get-contexts", context_name, "--no-headers"]
+    try:
+        output = run_shell_command(command)
+        cluster_name = output.split()[2]
+        return cluster_name
+    except subprocess.CalledProcessError:
+        return None
+
+
+def find_cluster_to_become_management_cluster():
+    current_context = find_kubectl_current_context()
+    cluster_name = None
+    if current_context:
+        cluster_name = find_cluster_in_current_context(current_context)
+        if not cluster_name:
+            logger.error("No cluster in context %s", current_context)
+    else:
+        logger.error("No kubectl current-context found")
+    if not cluster_name:
+        logger.warning("Proceeding to create a new management cluster")
+    return cluster_name
 
 
 def create_management_cluster(cmd, yes=False):
     check_prereqs(cmd)
-    msg = 'Do you want to initialize Cluster API on the current cluster?'
-    if not yes and not prompt_y_n(msg, default="n"):
+    existing_cluster = find_cluster_to_become_management_cluster()
+    found_cluster = False
+    if existing_cluster:
+        msg = f'Do you want to initialize Cluster API on the current cluster {existing_cluster}?'
+        if yes or prompt_y_n(msg, default="n"):
+            try:
+                _find_default_cluster()
+                found_cluster = True
+            except subprocess.CalledProcessError as err:
+                raise UnclassifiedUserFault("Can't locate a Kubernetes cluster") from err
+    if not found_cluster and not create_new_management_cluster(cmd):
         return
+    set_azure_identity_secret_env_vars()
+    _create_azure_identity_secret(cmd)
+    _install_capz_components(cmd)
 
-    command = ["clusterctl", "init", "--infrastructure", "azure"]
-    try:
-        output = subprocess.check_output(command, universal_newlines=True)
-        logger.info("%s returned:\n%s", " ".join(command), output)
-    except subprocess.CalledProcessError as err:
-        raise UnclassifiedUserFault("Can't locate a Kubernetes cluster") from err
+
+def create_new_management_cluster(cmd, prompt=True, pre_prompt_text=None):
+    choices = ["azure - a management cluster in the Azure cloud",
+               "local - a local Docker container-based management cluster",
+               "exit - don't create a management cluster"]
+
+    if prompt:
+        prompt = pre_prompt_text if pre_prompt_text else ""
+        prompt += """
+Where do you want to create a management cluster?
+"""
+        choice_index = prompt_choice_list(prompt, choices)
+    else:
+        choice_index = 0
+    cluster_name = "capi-manager"
+    if choice_index == 0:
+        command = ["az", "group", "create", "-l", "southcentralus", "--name", cluster_name]
+        try_command_with_spinner(cmd, command, "Creating Azure resource group", "✓ Created Azure resource group",
+                                 "Couldn't create Azure resource group")
+        command = ["az", "aks", "create", "-g", cluster_name, "--name", cluster_name, "--generate-ssh-keys",
+                   "--network-plugin", "azure", "--network-policy", "calico"]
+        try_command_with_spinner(cmd, command, "Creating Azure management cluster with AKS",
+                                 "✓ Created AKS management cluster", "Couldn't create AKS management cluster")
+        with Spinner(cmd, "Obtaining AKS credentials", "✓ Obtained AKS credentials"):
+            command = ["az", "aks", "get-credentials", "-g", cluster_name, "--name", cluster_name]
+            try:
+                subprocess.check_call(command, universal_newlines=True)
+            except subprocess.CalledProcessError as err:
+                raise UnclassifiedUserFault("Couldn't get credentials for AKS management cluster") from err
+    elif choice_index == 1:
+        check_kind(cmd, install=not prompt)
+        begin_msg = f'Creating local management cluster "{cluster_name}" with kind'
+        end_msg = f'✓ Created local management cluster "{cluster_name}"'
+        command = ["kind", "create", "cluster", "--name", cluster_name]
+        try_command_with_spinner(cmd, command, begin_msg, end_msg, "Couldn't create kind management cluster")
+    else:
+        return False
+    return True
 
 
 def delete_management_cluster(cmd, yes=False):  # pylint: disable=unused-argument
@@ -236,6 +293,15 @@ def update_management_cluster(cmd, yes=False):
         raise UnclassifiedUserFault("Couldn't upgrade management cluster") from err
 
 
+def set_azure_identity_secret_env_vars():
+    identity_secret_name = "AZURE_CLUSTER_IDENTITY_SECRET_NAME"
+    indentity_secret_namespace = "AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE"
+    cluster_identity_name = "CLUSTER_IDENTITY_NAME"
+    os.environ[identity_secret_name] = os.environ.get(identity_secret_name, "cluster-identity-secret")
+    os.environ[indentity_secret_namespace] = os.environ.get(indentity_secret_namespace, "default")
+    os.environ[cluster_identity_name] = os.environ.get(cluster_identity_name, "cluster-identity")
+
+
 # pylint: disable=inconsistent-return-statements
 def create_workload_cluster(  # pylint: disable=unused-argument,too-many-arguments,too-many-locals,too-many-statements
         cmd,
@@ -283,14 +349,10 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         return
 
     # Set Azure Identity Secret enviroment variables. This will be used in init_environment
-    identity_secret_name = "AZURE_CLUSTER_IDENTITY_SECRET_NAME"
-    indentity_secret_namespace = "AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE"
-    cluster_identity_name = "CLUSTER_IDENTITY_NAME"
-    os.environ[identity_secret_name] = os.environ.get(identity_secret_name, "cluster-identity-secret")
-    os.environ[indentity_secret_namespace] = os.environ.get(indentity_secret_namespace, "default")
-    os.environ[cluster_identity_name] = os.environ.get(cluster_identity_name, "cluster-identity")
+    set_azure_identity_secret_env_vars()
 
-    init_environment(cmd, not yes)
+    if not init_environment(cmd, not yes):
+        return
 
     # Generate the cluster configuration
     env = Environment(loader=PackageLoader("azext_capi", "templates"), auto_reload=False, undefined=StrictUndefined)
@@ -609,10 +671,7 @@ def find_management_cluster_retry(cmd, delay=3):
 
 
 def find_management_cluster():
-    cmd = ["kubectl", "cluster-info"]
-    match = check_cmd(cmd, r"Kubernetes .*?is running")
-    if match is None:
-        raise ResourceNotFoundError("No accessible Kubernetes cluster found")
+    _find_default_cluster()
     check_pods_status_by_namespace("capz-system", "No CAPZ installation found", "capz-controller-manager")
     check_pods_status_by_namespace("capi-system", "No CAPI installation found", "capi-controller-manager")
     check_pods_status_by_namespace("capi-kubeadm-bootstrap-system",
@@ -621,6 +680,14 @@ def find_management_cluster():
     check_pods_status_by_namespace("capi-kubeadm-control-plane-system",
                                    "No CAPI Kubeadm Control Plane installation found",
                                    "capi-kubeadm-control-plane-controller-manager")
+
+
+def _find_default_cluster():
+    cmd = ["kubectl", "cluster-info"]
+    match = check_cmd(cmd, r"Kubernetes .*?is running")
+    if match is None:
+        raise ResourceNotFoundError("No accessible Kubernetes cluster found")
+    return True
 
 
 def check_pods_status_by_namespace(namespace, error_message, pod_name):
