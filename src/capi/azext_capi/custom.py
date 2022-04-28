@@ -295,7 +295,7 @@ def update_management_cluster(cmd, yes=False):
 
 
 def create_resource_group(cmd, rg_name, location, yes=False):
-    msg = f"Do you want to create, an Azure resource group named {rg_name} located: {location}?"
+    msg = f'Create the Azure resource group "{rg_name}" in location "{location}"?'
     if yes or prompt_y_n(msg, default="n"):
         command = ["az", "group", "create", "-l", location, "-n", rg_name]
         begin_msg = f"Creating Resource Group: {rg_name}"
