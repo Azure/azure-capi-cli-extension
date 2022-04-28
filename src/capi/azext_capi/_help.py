@@ -47,6 +47,9 @@ parameters:
   - name: --machinepool
     type: bool
     short-summary: Use experimental MachinePools instead of MachineSets
+  - name: --management-cluster-name
+    type: string
+    short-summary: Name for management cluster.
   - name: --node-machine-count
     type: integer
   - name: --node-machine-type
@@ -108,6 +111,10 @@ long-summary: |
 helps['capi management create'] = """
 type: command
 short-summary: Create a CAPI management cluster.
+parameters:
+  - name: --cluster-name
+    type: string
+    short-summary: Name for management cluster.
 """
 
 helps['capi management delete'] = """
