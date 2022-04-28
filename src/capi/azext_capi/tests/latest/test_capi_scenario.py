@@ -21,6 +21,7 @@ from azext_capi.custom import create_resource_group, create_new_management_clust
 
 TEST_DIR = os.path.abspath(os.path.join(os.path.abspath(__file__), '..'))
 
+
 class CapiScenarioTest(ScenarioTest):
 
     @patch('azext_capi.custom.exit_if_no_management_cluster')
