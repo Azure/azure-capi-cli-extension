@@ -32,6 +32,7 @@ from jinja2 import Environment, PackageLoader, StrictUndefined
 from jinja2.exceptions import UndefinedError
 from knack.log import get_logger
 from knack.prompting import prompt_choice_list, prompt_y_n
+from knack.prompting import prompt as prompt_method
 from msrestazure.azure_exceptions import CloudError
 from six.moves.urllib.request import urlopen  # pylint: disable=import-error
 
@@ -47,7 +48,7 @@ def is_verbose():
     return any(handler.level <= logging.INFO for handler in logger.handlers)
 
 
-def init_environment(cmd, prompt=True):
+def init_environment(cmd, prompt=True, management_cluster_name=None):
     check_prereqs(cmd, install=True)
     # Create a management cluster if needed
     try:
@@ -63,7 +64,7 @@ Cluster API needs a "management cluster" to run its components.
 Learn more from the Cluster API Book:
 https://cluster-api.sigs.k8s.io/user/concepts.html
 """
-        if not create_new_management_cluster(cmd, prompt, pre_prompt):
+        if not create_new_management_cluster(cmd, prompt, pre_prompt, cluster_name=management_cluster_name):
             return False
         _create_azure_identity_secret(cmd)
         _install_capz_components(cmd)
@@ -153,7 +154,7 @@ def find_cluster_to_become_management_cluster():
     return cluster_name
 
 
-def create_management_cluster(cmd, yes=False):
+def create_management_cluster(cmd, cluster_name=None, yes=False):
     check_prereqs(cmd)
     existing_cluster = find_cluster_to_become_management_cluster()
     found_cluster = False
@@ -165,27 +166,44 @@ def create_management_cluster(cmd, yes=False):
                 found_cluster = True
             except subprocess.CalledProcessError as err:
                 raise UnclassifiedUserFault("Can't locate a Kubernetes cluster") from err
-    if not found_cluster and not create_new_management_cluster(cmd):
+    if not found_cluster and not create_new_management_cluster(cmd, cluster_name=cluster_name):
         return
     set_azure_identity_secret_env_vars()
     _create_azure_identity_secret(cmd)
     _install_capz_components(cmd)
 
 
-def create_new_management_cluster(cmd, prompt=True, pre_prompt_text=None):
+def get_cluster_name_by_user_prompt(default_name):
+    prompt = f"Please name the management cluster [Default {default_name}]: "
+    while True:
+        prompt_res = prompt_method(prompt)
+        prompt_res = prompt_res.strip()
+        if prompt_res == "":
+            return None
+        if re.match("^[a-z0-9.-]+$", prompt_res):
+            return prompt_res
+        msg = "Invalid name for cluster: only lowercase characters, numbers, dashes and periods allowed"
+        logger.error(msg)
+
+
+def create_new_management_cluster(cmd, prompt=True, pre_prompt_text=None, cluster_name=None):
     choices = ["azure - a management cluster in the Azure cloud",
                "local - a local Docker container-based management cluster",
                "exit - don't create a management cluster"]
 
+    default_cluster_name = "capi-manager"
     if prompt:
         prompt = pre_prompt_text if pre_prompt_text else ""
         prompt += """
 Where do you want to create a management cluster?
 """
         choice_index = prompt_choice_list(prompt, choices)
+        cluster_name = get_cluster_name_by_user_prompt(default_cluster_name)
+        if not cluster_name:
+            cluster_name = default_cluster_name
     else:
+        cluster_name = default_cluster_name
         choice_index = 0
-    cluster_name = "capi-manager"
     if choice_index == 0:
         command = ["az", "group", "create", "-l", "southcentralus", "--name", cluster_name]
         try_command_with_spinner(cmd, command, "Creating Azure resource group", "✓ Created Azure resource group",
@@ -317,6 +335,7 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         subscription_id=os.environ.get("AZURE_SUBSCRIPTION_ID"),
         ssh_public_key=os.environ.get("AZURE_SSH_PUBLIC_KEY_B64", ""),
         external_cloud_provider=False,
+        management_cluster_name=None,
         vnet_name=None,
         machinepool=False,
         ephemeral_disks=False,
@@ -353,7 +372,7 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
     # Set Azure Identity Secret enviroment variables. This will be used in init_environment
     set_azure_identity_secret_env_vars()
 
-    if not init_environment(cmd, not yes):
+    if not init_environment(cmd, not yes, management_cluster_name):
         return
 
     # Generate the cluster configuration

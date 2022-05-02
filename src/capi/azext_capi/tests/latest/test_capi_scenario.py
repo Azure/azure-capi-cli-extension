@@ -161,9 +161,11 @@ class CommandGenericTest(unittest.TestCase):
         with self.assertRaises(subprocess.CalledProcessError):
             _find_default_cluster()
 
+    @patch('azext_capi.custom.prompt_y_n')
+    @patch('azext_capi.custom.get_cluster_name_by_user_prompt')
     @patch('azext_capi.custom.try_command_with_spinner')
     @patch('azext_capi.custom.prompt_choice_list')
-    def test_create_new_management_cluster(self, promp_mock, try_spinner_mock):
+    def test_create_new_management_cluster(self, promp_mock, try_spinner_mock, user_prompt_mock, prompt_y_n):
         # Test exit after user input is >= 2
         cmd = Mock()
         promp_mock.return_value = 2
