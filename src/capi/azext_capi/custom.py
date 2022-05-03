@@ -48,7 +48,8 @@ def is_verbose():
     return any(handler.level <= logging.INFO for handler in logger.handlers)
 
 
-def init_environment(cmd, prompt=True, management_cluster_name=None):
+def init_environment(cmd, prompt=True, management_cluster_name=None,
+                     resource_group_name=None, location=None):
     check_prereqs(cmd, install=True)
     # Create a management cluster if needed
     try:
@@ -64,7 +65,9 @@ Cluster API needs a "management cluster" to run its components.
 Learn more from the Cluster API Book:
 https://cluster-api.sigs.k8s.io/user/concepts.html
 """
-        if not create_new_management_cluster(cmd, prompt, pre_prompt, cluster_name=management_cluster_name):
+        if not create_new_management_cluster(cmd, management_cluster_name,
+                                             resource_group_name, location,
+                                             pre_prompt_text=pre_prompt, prompt=prompt):
             return False
         _create_azure_identity_secret(cmd)
         _install_capz_components(cmd)
@@ -154,7 +157,20 @@ def find_cluster_to_become_management_cluster():
     return cluster_name
 
 
-def create_management_cluster(cmd, cluster_name=None, yes=False):
+def create_resource_group(cmd, rg_name, location, yes=False):
+    msg = f'Create the Azure resource group "{rg_name}" in location "{location}"?'
+    if yes or prompt_y_n(msg, default="n"):
+        command = ["az", "group", "create", "-l", location, "-n", rg_name]
+        begin_msg = f"Creating Resource Group: {rg_name}"
+        end_msg = f"✓ Created Resource Group: {rg_name}"
+        err_msg = f"Could not create resource group {rg_name}"
+        try_command_with_spinner(cmd, command, begin_msg, end_msg, err_msg)
+        return True
+    return False
+
+
+def create_management_cluster(cmd, cluster_name=None, resource_group_name=None, location=None,
+                              yes=False):
     check_prereqs(cmd)
     existing_cluster = find_cluster_to_become_management_cluster()
     found_cluster = False
@@ -166,7 +182,8 @@ def create_management_cluster(cmd, cluster_name=None, yes=False):
                 found_cluster = True
             except subprocess.CalledProcessError as err:
                 raise UnclassifiedUserFault("Can't locate a Kubernetes cluster") from err
-    if not found_cluster and not create_new_management_cluster(cmd, cluster_name=cluster_name):
+    if not found_cluster and not create_new_management_cluster(cmd, cluster_name, resource_group_name,
+                                                               location, prompt=not yes):
         return
     set_azure_identity_secret_env_vars()
     _create_azure_identity_secret(cmd)
@@ -174,50 +191,78 @@ def create_management_cluster(cmd, cluster_name=None, yes=False):
 
 
 def get_cluster_name_by_user_prompt(default_name):
-    prompt = f"Please name the management cluster [Default {default_name}]: "
+    prompt = "Please name the management cluster"
+    regex_validator = "^[a-z0-9.-]+$"
+    invalid_msg = "Invalid name for cluster: only lowercase characters, numbers, dashes and periods allowed"
+    return get_user_prompt_or_default(prompt, default_name, regex_validator, invalid_msg)
+
+
+def get_user_prompt_or_default(prompt_text, default_value, match_expression=None,
+                               invalid_prompt=None, skip_prompt=False):
+
+    if skip_prompt:
+        return default_value
+
+    prompt = f"{prompt_text} [Default {default_value}]: "
     while True:
-        prompt_res = prompt_method(prompt)
-        prompt_res = prompt_res.strip()
-        if prompt_res == "":
-            return None
-        if re.match("^[a-z0-9.-]+$", prompt_res):
-            return prompt_res
-        msg = "Invalid name for cluster: only lowercase characters, numbers, dashes and periods allowed"
-        logger.error(msg)
+        user_input = prompt_method(prompt)
+        user_input = user_input.strip()
+        if user_input == "":
+            return default_value
+        if match_expression and re.match(match_expression, user_input):
+            return user_input
+        if not match_expression:
+            return user_input
+        if invalid_prompt:
+            logger.error(invalid_prompt)
 
 
-def create_new_management_cluster(cmd, prompt=True, pre_prompt_text=None, cluster_name=None):
+def create_aks_management_cluster(cmd, cluster_name, resource_group_name=None, location=None, yes=False):
+    if not resource_group_name:
+        msg = "Please name the resource group for the management cluster"
+        resource_group_name = get_user_prompt_or_default(msg, cluster_name, skip_prompt=yes)
+    if not location:
+        default_location = "southcentralus"
+        msg = f"Please provide a location for {resource_group_name} resource group"
+        location = get_user_prompt_or_default(msg, default_location, skip_prompt=yes)
+    if not create_resource_group(cmd, resource_group_name, location, yes):
+        return False
+    command = ["az", "aks", "create", "-g", resource_group_name, "--name", cluster_name, "--generate-ssh-keys",
+               "--network-plugin", "azure", "--network-policy", "calico"]
+    try_command_with_spinner(cmd, command, "Creating Azure management cluster with AKS",
+                             "✓ Created AKS management cluster", "Couldn't create AKS management cluster")
+    with Spinner(cmd, "Obtaining AKS credentials", "✓ Obtained AKS credentials"):
+        command = ["az", "aks", "get-credentials", "-g", resource_group_name, "--name", cluster_name]
+        try:
+            subprocess.check_call(command, universal_newlines=True)
+        except subprocess.CalledProcessError as err:
+            raise UnclassifiedUserFault("Couldn't get credentials for AKS management cluster") from err
+    return True
+
+
+def create_new_management_cluster(cmd, cluster_name=None, resource_group_name=None,
+                                  location=None, pre_prompt_text=None, prompt=True):
     choices = ["azure - a management cluster in the Azure cloud",
                "local - a local Docker container-based management cluster",
                "exit - don't create a management cluster"]
 
     default_cluster_name = "capi-manager"
     if prompt:
-        prompt = pre_prompt_text if pre_prompt_text else ""
-        prompt += """
+        prompt_text = pre_prompt_text if pre_prompt_text else ""
+        prompt_text += """
 Where do you want to create a management cluster?
 """
-        choice_index = prompt_choice_list(prompt, choices)
-        cluster_name = get_cluster_name_by_user_prompt(default_cluster_name)
+        choice_index = prompt_choice_list(prompt_text, choices)
+        if choice_index != 2 and not cluster_name:
+            cluster_name = get_cluster_name_by_user_prompt(default_cluster_name)
+    else:
         if not cluster_name:
             cluster_name = default_cluster_name
-    else:
-        cluster_name = default_cluster_name
         choice_index = 0
     if choice_index == 0:
-        command = ["az", "group", "create", "-l", "southcentralus", "--name", cluster_name]
-        try_command_with_spinner(cmd, command, "Creating Azure resource group", "✓ Created Azure resource group",
-                                 "Couldn't create Azure resource group")
-        command = ["az", "aks", "create", "-g", cluster_name, "--name", cluster_name, "--generate-ssh-keys",
-                   "--network-plugin", "azure", "--network-policy", "calico"]
-        try_command_with_spinner(cmd, command, "Creating Azure management cluster with AKS",
-                                 "✓ Created AKS management cluster", "Couldn't create AKS management cluster")
-        with Spinner(cmd, "Obtaining AKS credentials", "✓ Obtained AKS credentials"):
-            command = ["az", "aks", "get-credentials", "-g", cluster_name, "--name", cluster_name]
-            try:
-                subprocess.check_call(command, universal_newlines=True)
-            except subprocess.CalledProcessError as err:
-                raise UnclassifiedUserFault("Couldn't get credentials for AKS management cluster") from err
+        if not create_aks_management_cluster(cmd, cluster_name, resource_group_name,
+                                             location, yes=not prompt):
+            return False
     elif choice_index == 1:
         check_kind(cmd, install=not prompt)
         begin_msg = f'Creating local management cluster "{cluster_name}" with kind'
@@ -336,6 +381,7 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         ssh_public_key=os.environ.get("AZURE_SSH_PUBLIC_KEY_B64", ""),
         external_cloud_provider=False,
         management_cluster_name=None,
+        management_cluster_resource_group_name=None,
         vnet_name=None,
         machinepool=False,
         ephemeral_disks=False,
@@ -372,7 +418,8 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
     # Set Azure Identity Secret enviroment variables. This will be used in init_environment
     set_azure_identity_secret_env_vars()
 
-    if not init_environment(cmd, not yes, management_cluster_name):
+    if not init_environment(cmd, not yes, management_cluster_name, management_cluster_resource_group_name,
+                            location):
         return
 
     # Generate the cluster configuration
