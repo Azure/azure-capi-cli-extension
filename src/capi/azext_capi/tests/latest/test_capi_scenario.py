@@ -3,22 +3,15 @@
 # Licensed under the MIT License. See License.txt in the project root for license information.
 # --------------------------------------------------------------------------------------------
 
-import subprocess
 import os
-import unittest
 from unittest.mock import MagicMock, Mock, patch
 
 from azure.cli.testsdk.scenario_tests import AllowLargeResponse
 from azure.cli.core.azclierror import InvalidArgumentValueError
-from azure.cli.core.azclierror import UnclassifiedUserFault
-from azure.cli.core.azclierror import ResourceNotFoundError
 from azure.cli.core.azclierror import RequiredArgumentMissingError
 from azure.cli.testsdk import (ScenarioTest, ResourceGroupPreparer)
 from knack.prompting import NoTTYException
 from msrestazure.azure_exceptions import CloudError
-
-
-from azext_capi.custom import create_resource_group, create_new_management_cluster, find_cluster_in_current_context, find_kubectl_current_context, get_user_prompt_or_default, run_shell_command, try_command_with_spinner, _find_default_cluster
 
 TEST_DIR = os.path.abspath(os.path.join(os.path.abspath(__file__), '..'))
 
@@ -130,176 +123,6 @@ class CapiScenarioTest(ScenarioTest):
                 ])
                 self.assertEqual(mock.call_count, 1)
                 self.assertEqual(mock.call_args_list[0][0][0][:3], ["clusterctl", "upgrade", "apply"])
-
-
-class CommandGenericTest(unittest.TestCase):
-
-    @patch('azext_capi.custom.Spinner')
-    def test_try_command_with_spinner(self, mock_spinner):
-        cmd = Mock()
-        with patch('subprocess.check_output') as mock:
-            try_command_with_spinner(cmd, ["fake-command"], "begin", "end", "error")
-            mock.assert_called_once()
-        error_msg = "fake error"
-        with self.assertRaises(UnclassifiedUserFault) as cm:
-            try_command_with_spinner(cmd, ["fake-command"], "begin", "end", error_msg)
-        self.assertEquals(cm.exception.error_msg, error_msg)
-
-    @patch('azext_capi.custom.check_cmd')
-    def test_find_default_cluster(self, check_cmd_mock):
-        check_cmd_mock.return_value = "fake return"
-        # Test kubernetes cluster is found and running
-        result = _find_default_cluster()
-        check_cmd_mock.assert_called_once()
-        self.assertTrue(result)
-        # Test kubernetes cluster is found but not running state matched
-        check_cmd_mock.return_value = None
-        with self.assertRaises(ResourceNotFoundError):
-            _find_default_cluster()
-        # Test error with command ran
-        check_cmd_mock.side_effect = subprocess.CalledProcessError(3, ['fakecommand'])
-        with self.assertRaises(subprocess.CalledProcessError):
-            _find_default_cluster()
-
-    @patch('azext_capi.custom.prompt_y_n')
-    @patch('azext_capi.custom.get_cluster_name_by_user_prompt')
-    @patch('azext_capi.custom.try_command_with_spinner')
-    @patch('azext_capi.custom.prompt_choice_list')
-    def test_create_new_management_cluster(self, promp_mock, try_spinner_mock, user_prompt_mock, prompt_y_n):
-        # Test exit after user input is >= 2
-        cmd = Mock()
-        promp_mock.return_value = 2
-        result = create_new_management_cluster(cmd)
-        self.assertFalse(result)
-        # Test create local kind management cluster
-        promp_mock.return_value = 1
-        with patch('azext_capi.custom.check_kind'):
-            result = create_new_management_cluster(cmd)
-            self.assertTrue(result)
-        # Test create AKS management cluster
-        promp_mock.return_value = 0
-        with patch('azext_capi.custom.create_aks_management_cluster'):
-            result = create_new_management_cluster(cmd)
-            self.assertTrue(result)
-
-    def test_run_shell_command(self):
-        command = ["fake-command"]
-        with patch('subprocess.check_output') as mock:
-            run_shell_command(command)
-            mock.assert_called_once()
-        with self.assertRaises(FileNotFoundError):
-            run_shell_command(command)
-
-    @patch('azext_capi.custom.run_shell_command')
-    def test_find_kubectl_current_context(self, run_shell_mock):
-        # Test found current context
-        context_name = "fake-context"
-        run_shell_mock.return_value = context_name
-        result = find_kubectl_current_context()
-        self.assertEquals(result, context_name)
-        # Test found current context with extra space
-        context_name = "fake-context"
-        run_shell_mock.return_value = f"  {context_name}  "
-        result = find_kubectl_current_context()
-        self.assertEquals(result, context_name)
-        # Test does not found current context
-        run_shell_mock.return_value = None
-        run_shell_mock.side_effect = subprocess.CalledProcessError(3, ['fakecommand'])
-        result = find_kubectl_current_context()
-        self.assertIsNone(result)
-
-    @patch('azext_capi.custom.run_shell_command')
-    def test_find_cluster_in_current_context(self, run_shell_mock):
-        # Test found current cluster in context
-        context_name = "context-name-fake"
-        cluster_name = "cluster-name-fake"
-        context_info = f"* {context_name} {cluster_name}"
-        run_shell_mock.return_value = context_info
-        result = find_cluster_in_current_context(context_name)
-        self.assertEquals(result, cluster_name)
-        # Test does not found current context
-        run_shell_mock.return_value = None
-        run_shell_mock.side_effect = subprocess.CalledProcessError(3, ['fakecommand'])
-        result = find_cluster_in_current_context(context_name)
-        self.assertIsNone(result)
-
-
-class CreateResourceGroup(unittest.TestCase):
-
-    def setUp(self):
-        self.cmd = Mock()
-        self.group = "fake-resource-group"
-        self.location = "fake-location"
-        self.try_command_patch = patch('azext_capi.custom.try_command_with_spinner')
-        self.try_command_mock = self.try_command_patch.start()
-        self.try_command_mock.return_value = None
-        self.addCleanup(self.try_command_patch.stop)
-
-    # Test created new resource group
-    def test_create_valid_resource_group(self):
-        result = create_resource_group(self.cmd, self.group, self.location, True)
-        self.assertTrue(result)
-
-    # Test error creating resource group
-    def test_raise_error_invalid_resource_group(self):
-        self.try_command_mock.side_effect = subprocess.CalledProcessError(3, ['fakecommand'])
-        with self.assertRaises(subprocess.CalledProcessError):
-            create_resource_group(self.cmd, self.group, self.location, True)
-
-
-class GetUserPromptMethodTest(unittest.TestCase):
-
-    def setUp(self):
-        self.fake_input = "fake-input"
-        self.fake_prompt = Mock()
-        self.fake_default_value = Mock()
-        self.prompt_method_patch = patch('azext_capi.custom.prompt_method')
-        self.prompt_method_mock = self.prompt_method_patch.start()
-        self.prompt_method_mock.return_value = None
-        self.addCleanup(self.prompt_method_patch.stop)
-
-    # Test user input return without any validation
-    def test_user_input_without_validation(self):
-        prompt_mock = self.prompt_method_mock
-        prompt_mock.return_value = self.fake_input
-        result = get_user_prompt_or_default(self.fake_prompt, self.fake_default_value)
-        self.assertEquals(result, self.fake_input)
-
-    # Test skip-prompt to return default value
-    def test_skip_prompt_flag(self):
-        prompt_mock = self.prompt_method_mock
-        prompt_mock.return_value = None
-        result = get_user_prompt_or_default(self.fake_prompt, self.fake_default_value, skip_prompt=True)
-        self.assertEquals(result, self.fake_default_value)
-        self.assertIsNotNone(result)
-
-    # Test input against validation
-    def test_write_user_input_with_validation(self):
-        prompt_mock = self.prompt_method_mock
-        valid_input = "abcd"
-        regex_validator = "^[a-z]+$"
-        prompt_mock.side_effect = ["Invalid-input_$(2", valid_input]
-        result = get_user_prompt_or_default(self.fake_prompt, self.fake_default_value, regex_validator)
-        self.assertEquals(result, valid_input)
-        self.assertEquals(prompt_mock.call_count, 2)
-        self.assertNotEquals(result, self.fake_default_value)
-
-    # Test invalid user input against validation
-    def test_invalid_input_with_validation(self):
-        prompt_mock = self.prompt_method_mock
-        regex_validator = "^[a-z]+$"
-        prompt_mock.side_effect = ["Invalid-input_$(2"]
-        with self.assertRaises(StopIteration):
-            get_user_prompt_or_default(self.fake_prompt, self.fake_default_value, regex_validator)
-
-    # Test user enter empty input for default value
-    def test_user_skips_input_for_default_value(self):
-        prompt_mock = self.prompt_method_mock
-        empty_input = ""
-        prompt_mock.return_value = empty_input
-        result = get_user_prompt_or_default(self.fake_prompt, self.fake_default_value)
-        self.assertEquals(result, self.fake_default_value)
-        self.assertNotEquals(result, empty_input)
 
 
 AZ_CAPI_LIST_JSON = """\
