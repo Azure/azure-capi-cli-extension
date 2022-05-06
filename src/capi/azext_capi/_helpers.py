@@ -33,3 +33,11 @@ def urlretrieve(url, filename):
     req = urlopen(url, context=ssl_context())  # pylint: disable=consider-using-with
     with open(filename, "wb") as out:
         out.write(req.read())
+
+
+def add_kubeconfig_to_command(kubeconfig=None):
+    return ["--kubeconfig", kubeconfig] if kubeconfig else []
+
+
+def has_kind_prefix(inpt_str):
+    return inpt_str.startswith("kind-")

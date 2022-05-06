@@ -5,7 +5,6 @@
 
 import subprocess
 import os
-import platform
 import sys
 import tempfile
 import unittest
@@ -16,7 +15,7 @@ from azure.cli.core.azclierror import UnclassifiedUserFault
 from azure.cli.core.azclierror import ResourceNotFoundError
 
 import azext_capi._helpers as helpers
-from azext_capi.custom import check_kubectl_namespace, create_resource_group, create_new_management_cluster, find_cluster_in_current_context, find_kubectl_current_context, get_user_prompt_or_default, management_cluster_components_missing_matching_expressions, run_shell_command, try_command_with_spinner, _find_default_cluster
+from azext_capi.custom import check_kubectl_namespace, create_resource_group, create_new_management_cluster, find_attribute_in_context, find_kubectl_current_context, get_user_prompt_or_default, management_cluster_components_missing_matching_expressions, run_shell_command, try_command_with_spinner, _find_default_cluster
 
 
 class TestSSLContextHelper(unittest.TestCase):
@@ -173,12 +172,13 @@ class FindKubectlCurrentContext(unittest.TestCase):
     # Test does not found current context
     def test_no_found_current_context(self):
         self.run_shell_mock.return_value = None
-        self.run_shell_mock.side_effect = subprocess.CalledProcessError(3, ['fakecommand'])
+        error = subprocess.CalledProcessError(3, ['fakecommand'], output="current-context is not set")
+        self.run_shell_mock.side_effect = error
         result = find_kubectl_current_context()
         self.assertIsNone(result)
 
 
-class FindClusterInCurrentContext(unittest.TestCase):
+class FindAttributeInContext(unittest.TestCase):
 
     def setUp(self):
         self.context_name = "context-name-fake"
@@ -187,19 +187,19 @@ class FindClusterInCurrentContext(unittest.TestCase):
         self.run_shell_mock.return_value = None
         self.addCleanup(self.run_shell_patch.stop)
 
-    # Test found current cluster in context
+    # Test found cluster in context
     def test_existing_context(self):
         cluster_name = "cluster-name-fake"
         context_info = f"* {self.context_name} {cluster_name}"
         self.run_shell_mock.return_value = context_info
-        result = find_cluster_in_current_context(self.context_name)
+        result = find_attribute_in_context(self.context_name, "cluster")
         self.assertEquals(result, cluster_name)
 
-    # Test does not found current context
+    # Test does not found context
     def test_no_existing_context(self):
         self.run_shell_mock.return_value = None
         self.run_shell_mock.side_effect = subprocess.CalledProcessError(3, ['fakecommand'])
-        result = find_cluster_in_current_context(self.context_name)
+        result = find_attribute_in_context(self.context_name, "cluster")
         self.assertIsNone(result)
 
 
@@ -366,3 +366,27 @@ class ManagementClusterComponentsMissingMatchExpressionTest(unittest.TestCase):
     def test_invalid_matches(self):
         for out in self.InvalidCases:
             self.assertIsNone(management_cluster_components_missing_matching_expressions(out))
+
+
+class AddKubeconfigFlagMethodTest(unittest.TestCase):
+
+    def test_no_empty_kubeconfig(self):
+        fake_kubeconfig = "fake-kubeconfig"
+        output = helpers.add_kubeconfig_to_command(fake_kubeconfig)
+        self.assertEquals(len(output), 2)
+        self.assertEquals(output[1], fake_kubeconfig)
+
+    def test_no_kubeconfig_argument(self):
+        output = helpers.add_kubeconfig_to_command()
+        self.assertEquals(len(output), 0)
+
+
+class HasKindPrefix(unittest.TestCase):
+
+    def test_valid_prefix(self):
+        fake_input = "kind-fake"
+        self.assertTrue(helpers.has_kind_prefix(fake_input))
+
+    def test_no_prefix(self):
+        fake_input = "fake"
+        self.assertFalse(helpers.has_kind_prefix(fake_input))
