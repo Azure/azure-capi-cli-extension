@@ -6,6 +6,7 @@
 """This module implements the behavior of `az capi` commands."""
 
 # pylint: disable=missing-docstring
+# pylint: disable=too-many-lines
 
 import base64
 import json
@@ -52,11 +53,33 @@ def init_environment(cmd, prompt=True, management_cluster_name=None,
                      resource_group_name=None, location=None):
     check_prereqs(cmd, install=True)
     # Create a management cluster if needed
+    use_new_cluster = False
+    pre_prompt = None
     try:
         find_management_cluster_retry(cmd)
+        cluster_name = find_cluster_to_become_management_cluster()
+        if prompt and not prompt_y_n(f"Do you want to use {cluster_name} as the management cluster?"):
+            use_new_cluster = True
+        else:
+            return True
     except ResourceNotFoundError as err:
-        if str(err) == "No Cluster API installation found":
-            _install_capz_components(cmd)
+        error_msg = err.error_msg
+        if management_cluster_components_missing_matching_expressions(error_msg):
+            choices = ["Create a new management cluster",
+                       "Use default kuberenetes cluster found and install CAPI required components",
+                       "Exit"]
+            msg = "The default kubernetes cluster found is missing required components for a management cluster.\
+                   \nDo you want to:"
+
+            index_choice = 0
+            if prompt:
+                index_choice = prompt_choice_list(msg, choices)
+            if index_choice == 0:
+                use_new_cluster = True
+            elif index_choice != 1:
+                return False
+        else:
+            raise UnclassifiedUserFault(err) from err
     except subprocess.CalledProcessError:
         pre_prompt = """
 No Kubernetes cluster was found using the default configuration.
@@ -65,12 +88,14 @@ Cluster API needs a "management cluster" to run its components.
 Learn more from the Cluster API Book:
 https://cluster-api.sigs.k8s.io/user/concepts.html
 """
-        if not create_new_management_cluster(cmd, management_cluster_name,
-                                             resource_group_name, location,
-                                             pre_prompt_text=pre_prompt, prompt=prompt):
-            return False
-        _create_azure_identity_secret(cmd)
-        _install_capz_components(cmd)
+        use_new_cluster = True
+    if use_new_cluster and not create_new_management_cluster(cmd, management_cluster_name,
+                                                             resource_group_name, location,
+                                                             pre_prompt_text=pre_prompt, prompt=prompt):
+        return False
+
+    _create_azure_identity_secret(cmd)
+    _install_capz_components(cmd)
     return True
 
 
@@ -727,51 +752,100 @@ def check_environment_var(var):
 
 def find_management_cluster_retry(cmd, delay=3):
     with Spinner(cmd, "Waiting for Cluster API to be ready", "✓ Cluster API is ready"):
-        for _ in range(0, 100):
+        last_err_msg = None
+        for _ in range(0, 10):
             try:
                 find_management_cluster()
                 break
-            except ResourceNotFoundError:
+            except ResourceNotFoundError as err:
+                last_err_msg = err.error_msg
+                if management_cluster_components_missing_matching_expressions(last_err_msg):
+                    raise
                 time.sleep(delay)
         else:
-            return False
+            raise ResourceNotFoundError(last_err_msg)
         return True
+
+
+def management_cluster_components_missing_matching_expressions(output):
+    reg_match = [r"namespace: .+?could not be found",
+                 r"No resources found in .+?namespace",
+                 r"No .+? installation found"]
+    for exp in reg_match:
+        if match_output(output, exp):
+            return True
 
 
 def find_management_cluster():
     _find_default_cluster()
-    check_pods_status_by_namespace("capz-system", "No CAPZ installation found", "capz-controller-manager")
-    check_pods_status_by_namespace("capi-system", "No CAPI installation found", "capi-controller-manager")
-    check_pods_status_by_namespace("capi-kubeadm-bootstrap-system",
-                                   "No CAPI Kubeadm Bootstrap installation found",
-                                   "capi-kubeadm-bootstrap-controller-manager")
-    check_pods_status_by_namespace("capi-kubeadm-control-plane-system",
-                                   "No CAPI Kubeadm Control Plane installation found",
-                                   "capi-kubeadm-control-plane-controller-manager")
+    components = [
+        {
+            "namespace": "capz-system",
+            "err_msg": "No CAPZ installation found",
+            "pod": "capz-controller-manager"
+        },
+        {
+            "namespace": "capi-system",
+            "err_msg": "No CAPI installation found",
+            "pod": "capi-controller-manager"
+        },
+        {
+            "namespace": "capi-kubeadm-bootstrap-system",
+            "err_msg": "No CAPI Kubeadm Bootstrap installation found",
+            "pod": "capi-kubeadm-bootstrap-controller-manager"
+        },
+        {
+            "namespace": "capi-kubeadm-control-plane-system",
+            "err_msg": "No CAPI Kubeadm Control Plane installation found",
+            "pod": "capi-kubeadm-control-plane-controller-manager"
+        }
+    ]
+
+    for component in components:
+        check_kubectl_namespace(component["namespace"])
+        check_pods_status_by_namespace(component["namespace"], component["err_msg"], component["pod"])
+
+
+def check_kubectl_namespace(namespace):
+    cmd = ["kubectl", "get", "namespaces", namespace]
+    try:
+        output = run_shell_command(cmd)
+        match = match_output(output, fr"{namespace}.+?Active")
+        if match is None:
+            raise ResourceNotFoundError(f"namespace: {namespace} status is not Active")
+    except subprocess.CalledProcessError as err:
+        raise ResourceNotFoundError(f"namespace: {namespace} could not be found!") from err
 
 
 def _find_default_cluster():
     cmd = ["kubectl", "cluster-info"]
-    match = check_cmd(cmd, r"Kubernetes .*?is running")
+    output = run_shell_command(cmd)
+    match = match_output(output, r"Kubernetes .*?is running")
     if match is None:
         raise ResourceNotFoundError("No accessible Kubernetes cluster found")
     return True
 
 
 def check_pods_status_by_namespace(namespace, error_message, pod_name):
-    cmd = ["kubectl", "get", "pods", "--namespace", namespace]
+    get_pods_cmd = ["kubectl", "get", "pods"]
+    cmd = get_pods_cmd + ["--namespace", namespace]
     try:
-        match = check_cmd(cmd, fr"{pod_name}-.+?Running")
-        if match is None:
+        output = run_shell_command(cmd)
+        match = match_output(output, fr"No resources found in {namespace} namespace")
+        if match:
             raise ResourceNotFoundError(error_message)
+        match = match_output(output, fr"{pod_name}-.+?Running")
+        if match is None:
+            raise ResourceNotFoundError(f"No pods running in {namespace} namespace")
     except subprocess.CalledProcessError as err:
-        cmd = ["kubectl", "get", "pods", "-A", namespace]
+        cmd = get_pods_cmd + ["-A", namespace]
         try:
-            output = subprocess.check_output(cmd, universal_newlines=True, stderr=subprocess.STDOUT)
+            output = run_shell_command(cmd)
             logger.debug(output)
         except subprocess.CalledProcessError as err:
             logger.error(err)
         logger.error(err)
+        raise
 
 
 def exit_if_no_management_cluster():
@@ -782,12 +856,9 @@ def exit_if_no_management_cluster():
         raise UnclassifiedUserFault(msg) from err
 
 
-def check_cmd(command, regexp=None):
-    output = subprocess.check_output(command, universal_newlines=True, stderr=subprocess.STDOUT)
-    logger.info("%s returned:\n%s", " ".join(command), output)
+def match_output(output, regexp=None):
     if regexp is not None:
         return re.search(regexp, output)
-    return False
 
 
 def which(binary):
