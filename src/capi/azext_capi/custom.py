@@ -36,7 +36,8 @@ from six.moves.urllib.request import urlopen  # pylint: disable=import-error
 from ._helpers import ssl_context, urlretrieve, add_kubeconfig_to_command, has_kind_prefix
 from ._params import _get_default_install_location
 from .helpers.logger import is_verbose, logger
-from .helpers.Spinner import Spinner
+from .helpers.spinner import Spinner
+from .helpers.run_command_helpers import try_command_with_spinner, run_shell_command
 
 MANAGEMENT_RG_NAME = "MANAGEMENT_RG_NAME"
 KUBECONFIG = "KUBECONFIG"
@@ -92,20 +93,6 @@ https://cluster-api.sigs.k8s.io/user/concepts.html
     return True
 
 
-def try_command_with_spinner(cmd, command, spinner_begin_msg, spinner_end_msg,
-                             error_msg, include_error_stdout=False):
-    with Spinner(cmd, spinner_begin_msg, spinner_end_msg):
-        try:
-            # if --verbose, don't capture stderr
-            stderr = None if is_verbose() else subprocess.STDOUT
-            output = subprocess.check_output(command, universal_newlines=True, stderr=stderr)
-            logger.info("%s returned:\n%s", " ".join(command), output)
-        except (subprocess.CalledProcessError, FileNotFoundError) as err:
-            if include_error_stdout:
-                error_msg += f"\n{err.stdout}"
-            raise UnclassifiedUserFault(error_msg) from err
-
-
 def _create_azure_identity_secret(cmd, kubeconfig=None):
     secret_name = os.environ["AZURE_CLUSTER_IDENTITY_SECRET_NAME"]
     secret_namespace = os.environ["AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE"]
@@ -128,14 +115,6 @@ def _install_capi_provider_components(cmd, kubeconfig=None):
     command = ["clusterctl", "init", "--infrastructure", "azure"]
     command += add_kubeconfig_to_command(kubeconfig)
     try_command_with_spinner(cmd, command, begin_msg, end_msg, error_msg)
-
-
-def run_shell_command(command):
-    # if --verbose, don't capture stderr
-    stderr = None if is_verbose() else subprocess.STDOUT
-    output = subprocess.check_output(command, universal_newlines=True, stderr=stderr)
-    logger.info("%s returned:\n%s", " ".join(command), output)
-    return output
 
 
 def find_kubectl_current_context():
