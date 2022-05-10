@@ -10,15 +10,12 @@
 
 import base64
 import json
-import logging
 import os
 import platform
 import re
 import stat
 import subprocess
 import time
-from functools import lru_cache
-from threading import Timer
 
 from azure.cli.core import get_default_cli
 from azure.cli.core.api import get_config_dir
@@ -31,7 +28,6 @@ from azure.cli.core.azclierror import UnclassifiedUserFault
 from azure.cli.core.azclierror import ValidationError
 from jinja2 import Environment, PackageLoader, StrictUndefined
 from jinja2.exceptions import UndefinedError
-from knack.log import get_logger
 from knack.prompting import prompt_choice_list, prompt_y_n
 from knack.prompting import prompt as prompt_method
 from msrestazure.azure_exceptions import CloudError
@@ -39,17 +35,11 @@ from six.moves.urllib.request import urlopen  # pylint: disable=import-error
 
 from ._helpers import ssl_context, urlretrieve, add_kubeconfig_to_command, has_kind_prefix
 from ._params import _get_default_install_location
-
-
-logger = get_logger()  # pylint: disable=invalid-name
+from .helpers.logger import is_verbose, logger
+from .helpers.Spinner import Spinner
 
 MANAGEMENT_RG_NAME = "MANAGEMENT_RG_NAME"
 KUBECONFIG = "KUBECONFIG"
-
-
-@lru_cache(maxsize=None)
-def is_verbose():
-    return any(handler.level <= logging.INFO for handler in logger.handlers)
 
 
 def init_environment(cmd, prompt=True, management_cluster_name=None,
@@ -802,42 +792,6 @@ def check_enviroment_variables():
             missing_env_vars = ", ".join(missing_env_vars)
             err_msg = f"Required environment variables {missing_env_vars} were not found."
         raise RequiredArgumentMissingError(err_msg)
-
-
-class Spinner():
-
-    def __init__(self, cmd, begin_msg="In Progress", end_msg=" ✓ Finished"):
-        self._controller = cmd.cli_ctx.get_progress_controller()
-        self.begin_msg, self.end_msg = begin_msg, end_msg
-        self.tick()
-
-    def begin(self, **kwargs):
-        if not is_verbose():
-            self._controller.begin(**kwargs)
-
-    def end(self, **kwargs):
-        self._controller.end(**kwargs)
-
-    def tick(self):
-        if not is_verbose() and self._controller.is_running():
-            Timer(0.25, self.tick).start()
-            self.update()
-
-    def update(self):
-        self._controller.update()
-
-    def __enter__(self):
-        self._controller.begin(message=self.begin_msg)
-        logger.info(self.begin_msg)
-        return self
-
-    def __exit__(self, _type, value, traceback):
-        if traceback:
-            logger.debug(traceback)
-            self._controller.end()
-        else:
-            self._controller.end(message=self.end_msg)
-            logger.warning(self.end_msg)
 
 
 def check_clusterctl(cmd, install=False):
