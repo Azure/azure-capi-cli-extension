@@ -16,7 +16,7 @@ from azure.cli.core.azclierror import UnclassifiedUserFault
 from azure.cli.core.azclierror import ResourceNotFoundError
 
 import azext_capi._helpers as helpers
-from azext_capi.custom import create_resource_group, create_new_management_cluster, find_cluster_in_current_context, find_kubectl_current_context, get_user_prompt_or_default, run_shell_command, try_command_with_spinner, _find_default_cluster
+from azext_capi.custom import check_kubectl_namespace, create_resource_group, create_new_management_cluster, find_cluster_in_current_context, find_kubectl_current_context, get_user_prompt_or_default, management_cluster_components_missing_matching_expressions, run_shell_command, try_command_with_spinner, _find_default_cluster
 
 
 class TestSSLContextHelper(unittest.TestCase):
@@ -64,26 +64,32 @@ class FindDefaultCluster(unittest.TestCase):
 
     def setUp(self):
         self.cmd = Mock()
-        self.check_cmd_patch = patch('azext_capi.custom.check_cmd')
-        self.check_cmd_mock = self.check_cmd_patch.start()
-        self.check_cmd_mock.return_value = None
-        self.addCleanup(self.check_cmd_patch.stop)
+        self.match_output_patch = patch('azext_capi.custom.match_output')
+        self.match_output_mock = self.match_output_patch.start()
+        self.match_output_mock.return_value = None
+        self.addCleanup(self.match_output_patch.stop)
+
+        self.run_shell_command_patch = patch('azext_capi.custom.run_shell_command')
+        self.run_shell_command_mock = self.run_shell_command_patch.start()
+        self.addCleanup(self.run_shell_command_patch.stop)
 
     # Test kubernetes cluster is found and running
     def test_found_k8s_cluster_running_state(self):
-        self.check_cmd_mock.return_value = "fake_return"
+        self.run_shell_command_mock.return_value = "fake_return"
+        self.match_output_mock.return_value = Mock()
         result = _find_default_cluster()
-        self.check_cmd_mock.assert_called_once()
+        self.match_output_mock.assert_called_once()
         self.assertTrue(result)
 
     # Test kubernetes cluster is found but not running state matched
     def test_found_cluster_non_running_state(self):
+        self.run_shell_command_mock.return_value = "fake_return"
         with self.assertRaises(ResourceNotFoundError):
             _find_default_cluster()
 
     # Test error with command ran
     def test_encouter_error_with_ran_command(self):
-        self.check_cmd_mock.side_effect = subprocess.CalledProcessError(3, ['fakecommand'])
+        self.run_shell_command_mock.side_effect = subprocess.CalledProcessError(3, ['fakecommand'])
         with self.assertRaises(subprocess.CalledProcessError):
             _find_default_cluster()
 
@@ -300,3 +306,63 @@ class TryCommandWithSpinner(unittest.TestCase):
             try_command_with_spinner(self.cmd, self.command, self.begin_msg,
                                      self.end_msg, self.error_msg)
         self.assertEquals(cm.exception.error_msg, self.error_msg)
+
+
+class CheckKubectlNamespaceTest(unittest.TestCase):
+
+    def setUp(self):
+        self.namespace = "fake"
+        self.command = ["fake-command"]
+
+        self.run_shell_command_patch = patch('azext_capi.custom.run_shell_command')
+        self.run_shell_command_mock = self.run_shell_command_patch.start()
+        self.addCleanup(self.run_shell_command_patch.stop)
+
+        self.match_output_patch = patch('azext_capi.custom.match_output')
+        self.match_output_mock = self.match_output_patch.start()
+        self.addCleanup(self.match_output_patch.stop)
+
+    def test_no_existing_namespace(self):
+        error_msg = f"namespace: {self.namespace} could not be found!"
+        error_side_effect = subprocess.CalledProcessError(2, self.command, output=error_msg)
+        self.run_shell_command_mock.side_effect = error_side_effect
+        with self.assertRaises(ResourceNotFoundError) as cm:
+            check_kubectl_namespace(self.namespace)
+        self.assertEquals(cm.exception.error_msg, error_msg)
+
+    def test_no_active_namespace(self):
+        self.run_shell_command_mock.return_value = f"{self.namespace} FakeStatus FakeAge"
+        self.match_output_mock.return_value = None
+        with self.assertRaises(ResourceNotFoundError) as cm:
+            check_kubectl_namespace(self.namespace)
+        self.assertEquals(cm.exception.error_msg, f"namespace: {self.namespace} status is not Active")
+
+    def test_existing_namespace(self):
+        self.run_shell_command_mock.return_value = f"{self.namespace} Active FakeAge"
+        self.match_output_mock.return_value = True
+        output = check_kubectl_namespace(self.namespace)
+        self.assertIsNone(output)
+
+
+class ManagementClusterComponentsMissingMatchExpressionTest(unittest.TestCase):
+
+    ValidCases = [
+        "namespace: fake could not be found",
+        "No resources found in fake-ns namespace",
+        "No Fake installation found"
+    ]
+
+    InvalidCases = [
+        "",
+        "fake",
+        "Invalid",
+        "No installation found"
+    ]
+
+    def test_valid_matches(self):
+        for out in self.ValidCases:
+            self.assertTrue(management_cluster_components_missing_matching_expressions(out))
+
+    def test_invalid_matches(self):
+        for out in self.InvalidCases:
+            self.assertIsNone(management_cluster_components_missing_matching_expressions(out))
