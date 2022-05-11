@@ -11,33 +11,28 @@
 import base64
 import json
 import os
-import platform
 import re
-import stat
 import subprocess
 import time
 
 from azure.cli.core import get_default_cli
 from azure.cli.core.api import get_config_dir
-from azure.cli.core.azclierror import FileOperationError
 from azure.cli.core.azclierror import InvalidArgumentValueError
 from azure.cli.core.azclierror import RequiredArgumentMissingError
 from azure.core.exceptions import ResourceNotFoundError as ResourceNotFoundException
 from azure.cli.core.azclierror import ResourceNotFoundError
 from azure.cli.core.azclierror import UnclassifiedUserFault
-from azure.cli.core.azclierror import ValidationError
 from jinja2 import Environment, PackageLoader, StrictUndefined
 from jinja2.exceptions import UndefinedError
 from knack.prompting import prompt_choice_list, prompt_y_n
 from knack.prompting import prompt as prompt_method
 from msrestazure.azure_exceptions import CloudError
-from six.moves.urllib.request import urlopen  # pylint: disable=import-error
 
-from ._helpers import ssl_context, urlretrieve, add_kubeconfig_to_command, has_kind_prefix
-from ._params import _get_default_install_location
+from .helpers.network_helpers import add_kubeconfig_to_command, has_kind_prefix
 from .helpers.logger import is_verbose, logger
 from .helpers.spinner import Spinner
 from .helpers.run_command_helpers import try_command_with_spinner, run_shell_command
+from .helpers.binary_helpers import check_clusterctl, check_kubectl, check_kind
 
 MANAGEMENT_RG_NAME = "MANAGEMENT_RG_NAME"
 KUBECONFIG = "KUBECONFIG"
@@ -773,30 +768,6 @@ def check_enviroment_variables():
         raise RequiredArgumentMissingError(err_msg)
 
 
-def check_clusterctl(cmd, install=False):
-    if not which("clusterctl"):
-        logger.info("clusterctl was not found.")
-        if install or prompt_y_n("Download and install clusterctl?", default="n"):
-            with Spinner(cmd, "Downloading clusterctl", "✓ Downloaded clusterctl"):
-                install_clusterctl(cmd)
-
-
-def check_kind(cmd, install=False):
-    if not which("kind"):
-        logger.info("kind was not found.")
-        if install or prompt_y_n("Download and install kind?", default="n"):
-            with Spinner(cmd, "Downloading kind", "✓ Downloaded kind"):
-                install_kind(cmd)
-
-
-def check_kubectl(cmd, install=False):
-    if not which("kubectl"):
-        logger.info("kubectl was not found.")
-        if install or prompt_y_n("Download and install kubectl?", default="n"):
-            with Spinner(cmd, "Downloading kubectl", "✓ Downloaded kubectl"):
-                install_kubectl(cmd)
-
-
 def check_environment_var(var):
     var_b64 = var + "_B64"
     val = os.environ.get(var_b64)
@@ -923,169 +894,3 @@ def exit_if_no_management_cluster():
 def match_output(output, regexp=None):
     if regexp is not None:
         return re.search(regexp, output)
-
-
-def which(binary):
-    path_var = os.getenv("PATH")
-
-    if platform.system() == "Windows":
-        binary += ".exe"
-        parts = path_var.split(";")
-    else:
-        parts = path_var.split(":")
-
-    for part in parts:
-        bin_path = os.path.join(part, binary)
-        if os.path.isfile(bin_path) and os.access(bin_path, os.X_OK):
-            return bin_path
-
-    return None
-
-
-def install_clusterctl(_cmd, client_version="latest", install_location=None, source_url=None):
-    """
-    Install clusterctl, a command-line interface for Cluster API Kubernetes clusters.
-    """
-
-    if not source_url:
-        source_url = "https://github.com/kubernetes-sigs/cluster-api/releases/"
-        # TODO: mirror clusterctl binary to Azure China cloud--see install_kubectl().
-
-    if client_version != "latest":
-        source_url += "tags/"
-    source_url += "{}/download/clusterctl-{}-amd64"
-
-    file_url = ""
-    system = platform.system()
-    if system in ("Darwin", "Linux"):
-        file_url = source_url.format(client_version, system.lower())
-    else:  # TODO: support Windows someday?
-        raise ValidationError(f'The clusterctl binary is not available for "{system}"')
-
-    # ensure installation directory exists
-    if install_location is None:
-        install_location = _get_default_install_location("clusterctl")
-    install_dir, cli = os.path.dirname(install_location), os.path.basename(
-        install_location
-    )
-    if not os.path.exists(install_dir):
-        os.makedirs(install_dir)
-
-    return download_binary(install_location, install_dir, file_url, system, cli)
-
-
-def install_kind(_cmd, client_version="v0.10.0", install_location=None, source_url=None):
-    """
-    Install kind, a container-based Kubernetes environment for development and testing.
-    """
-
-    if not source_url:
-        source_url = "https://kind.sigs.k8s.io/dl/{}/kind-{}-amd64"
-
-    # ensure installation directory exists
-    if install_location is None:
-        install_location = _get_default_install_location("kind")
-    install_dir, cli = os.path.dirname(install_location), os.path.basename(
-        install_location
-    )
-    if not os.path.exists(install_dir):
-        os.makedirs(install_dir)
-
-    file_url = ""
-    system = platform.system()
-    if system == "Windows":
-        file_url = source_url.format(client_version, "windows")
-    elif system == "Linux":
-        file_url = source_url.format(client_version, "linux")
-    elif system == "Darwin":
-        file_url = source_url.format(client_version, "darwin")
-    else:
-        raise InvalidArgumentValueError(f'System "{system}" is not supported by kind.')
-
-    return download_binary(install_location, install_dir, file_url, system, cli)
-
-
-def install_kubectl(cmd, client_version="latest", install_location=None, source_url=None):
-    """
-    Install kubectl, a command-line interface for Kubernetes clusters.
-    """
-
-    if not source_url:
-        source_url = "https://storage.googleapis.com/kubernetes-release/release"
-        cloud_name = cmd.cli_ctx.cloud.name
-        if cloud_name.lower() == "azurechinacloud":
-            source_url = "https://mirror.azure.cn/kubernetes/kubectl"
-
-    if client_version == "latest":
-        with urlopen(source_url + "/stable.txt", context=ssl_context()) as f:
-            client_version = f.read().decode("utf-8").strip()
-    else:
-        client_version = f"v{client_version}"
-
-    file_url = ""
-    system = platform.system()
-    base_url = source_url + "/{}/bin/{}/amd64/{}"
-
-    # ensure installation directory exists
-    if install_location is None:
-        install_location = _get_default_install_location("kubectl")
-    install_dir, cli = os.path.dirname(install_location), os.path.basename(
-        install_location
-    )
-    if not os.path.exists(install_dir):
-        os.makedirs(install_dir)
-
-    if system == "Windows":
-        file_url = base_url.format(client_version, "windows", "kubectl.exe")
-    elif system == "Linux":
-        # TODO: Support ARM CPU here
-        file_url = base_url.format(client_version, "linux", "kubectl")
-    elif system == "Darwin":
-        file_url = base_url.format(client_version, "darwin", "kubectl")
-    else:
-        raise InvalidArgumentValueError(
-            f"Proxy server ({system}) does not exist on the cluster."
-        )
-
-    return download_binary(install_location, install_dir, file_url, system, cli)
-
-
-def download_binary(install_location, install_dir, file_url, system, cli):
-
-    logger.info('Downloading client to "%s" from "%s"', install_location, file_url)
-    try:
-        urlretrieve(file_url, install_location)
-        os.chmod(
-            install_location,
-            os.stat(install_location).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
-        )
-    except IOError as ex:
-        err_msg = f"Connection error while attempting to download client ({ex})"
-        raise FileOperationError(err_msg) from ex
-
-    if system == "Windows":
-        # be verbose, as the install_location is likely not in Windows's search PATHs
-        env_paths = os.environ["PATH"].split(";")
-        found = next(
-            (x for x in env_paths if x.lower().rstrip("\\") == install_dir.lower()),
-            None,
-        )
-        if not found:
-            # pylint: disable=logging-format-interpolation
-            logger.warning(
-                'Please add "%s" to your search PATH so the `%s` can be found. 2 options: \n'
-                '    1. Run "set PATH=%%PATH%%;%s" or "$env:path += \'%s\'" for PowerShell. '
-                "This is good for the current command session.\n"
-                "    2. Update system PATH environment variable by following "
-                '"Control Panel->System->Advanced->Environment Variables", and re-open the command window. '
-                "You only need to do it once",
-                install_dir, cli, install_dir, install_dir,
-            )
-    else:
-        if not which(cli):
-            logger.warning(
-                "Please ensure that %s is in your search PATH, so the `%s` command can be found.",
-                install_dir,
-                cli,
-            )
-    return install_location

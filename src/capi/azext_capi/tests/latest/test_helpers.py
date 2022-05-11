@@ -14,8 +14,9 @@ from unittest.mock import patch, Mock
 from azure.cli.core.azclierror import UnclassifiedUserFault
 from azure.cli.core.azclierror import ResourceNotFoundError
 
-import azext_capi._helpers as helpers
-from azext_capi.custom import check_kubectl_namespace, create_resource_group, create_new_management_cluster, find_attribute_in_context, find_kubectl_current_context, get_user_prompt_or_default, management_cluster_components_missing_matching_expressions, run_shell_command, try_command_with_spinner, _find_default_cluster
+import azext_capi.helpers.network_helpers as network_helpers
+from azext_capi.custom import check_kubectl_namespace, create_resource_group, create_new_management_cluster, find_attribute_in_context, find_kubectl_current_context, get_user_prompt_or_default, management_cluster_components_missing_matching_expressions, _find_default_cluster
+from azext_capi.helpers.run_command_helpers import try_command_with_spinner, run_shell_command
 
 
 class TestSSLContextHelper(unittest.TestCase):
@@ -42,19 +43,19 @@ class TestSSLContextHelper(unittest.TestCase):
             with patch('azure.cli.core.util.in_cloud_console', return_value=case.cloud_console):
                 with patch.object(sys, 'version_info', (case.major, case.minor)):
                     with patch('platform.system', return_value=case.system):
-                        self.assertTrue(helpers.ssl_context())
+                        self.assertTrue(network_helpers.ssl_context())
 
 
 class TestURLRetrieveHelper(unittest.TestCase):
 
-    @patch('azext_capi._helpers.urlopen')
+    @patch('azext_capi.helpers.network_helpers.urlopen')
     def test_urlretrieve(self, mock_urlopen):
         random_bytes = os.urandom(2048)
         req = mock_urlopen.return_value
         req.read.return_value = random_bytes
         with tempfile.NamedTemporaryFile(delete=False) as fp:
             fp.close()
-            helpers.urlretrieve('https://dummy.url', fp.name)
+            network_helpers.urlretrieve('https://dummy.url', fp.name)
             self.assertEqual(open(fp.name, 'rb').read(), random_bytes)
             os.unlink(fp.name)
 
@@ -289,7 +290,7 @@ class TryCommandWithSpinner(unittest.TestCase):
         self.end_msg = "end"
         self.error_msg = "error"
         self.command = ["fake-command"]
-        self.spinner_patch = patch('azext_capi.custom.Spinner')
+        self.spinner_patch = patch('azext_capi.helpers.run_command_helpers.Spinner')
         self.spinner_mock = self.spinner_patch.start()
         self.addCleanup(self.spinner_patch.stop)
 
@@ -372,12 +373,12 @@ class AddKubeconfigFlagMethodTest(unittest.TestCase):
 
     def test_no_empty_kubeconfig(self):
         fake_kubeconfig = "fake-kubeconfig"
-        output = helpers.add_kubeconfig_to_command(fake_kubeconfig)
+        output = network_helpers.add_kubeconfig_to_command(fake_kubeconfig)
         self.assertEquals(len(output), 2)
         self.assertEquals(output[1], fake_kubeconfig)
 
     def test_no_kubeconfig_argument(self):
-        output = helpers.add_kubeconfig_to_command()
+        output = network_helpers.add_kubeconfig_to_command()
         self.assertEquals(len(output), 0)
 
 
@@ -385,8 +386,8 @@ class HasKindPrefix(unittest.TestCase):
 
     def test_valid_prefix(self):
         fake_input = "kind-fake"
-        self.assertTrue(helpers.has_kind_prefix(fake_input))
+        self.assertTrue(network_helpers.has_kind_prefix(fake_input))
 
     def test_no_prefix(self):
         fake_input = "fake"
-        self.assertFalse(helpers.has_kind_prefix(fake_input))
+        self.assertFalse(network_helpers.has_kind_prefix(fake_input))
