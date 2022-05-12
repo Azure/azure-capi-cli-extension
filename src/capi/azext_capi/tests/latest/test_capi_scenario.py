@@ -80,8 +80,9 @@ class CapiScenarioTest(ScenarioTest):
 
             self.assertEqual(mock.call_count, 2)
 
+    @patch('azext_capi.custom.is_self_managed_cluster', return_value=False)
     @patch('azext_capi.custom.exit_if_no_management_cluster')
-    def test_capi_delete(self, mock_def):
+    def test_capi_delete(self, mock_def, mock_is_self_managed):
         # Test (indirectly) that user is prompted for confirmation by default
         with self.assertRaises(NoTTYException):
             self.cmd('capi delete --name testcluster1')
