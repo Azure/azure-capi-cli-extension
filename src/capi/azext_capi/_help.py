@@ -35,6 +35,9 @@ parameters:
   - name: --external-cloud-provider
     type: bool
     short-summary: Use the external (AKA "out-of-tree") Azure cloud-provider
+  - name: --template
+    type: string
+    long-summary: User-defined template to create a workload cluster. Accepts a URL or file.
   - name: --kubernetes-version -k
     type: string
     short-summary: Version of Kubernetes to use

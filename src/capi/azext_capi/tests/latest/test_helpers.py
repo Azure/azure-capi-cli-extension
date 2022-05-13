@@ -393,3 +393,16 @@ class HasKindPrefix(unittest.TestCase):
     def test_no_prefix(self):
         fake_input = "fake"
         self.assertFalse(generic.has_kind_prefix(fake_input))
+
+
+class GetUrlDomainName(unittest.TestCase):
+
+    def test_correct_url(self):
+        fake_url = "https://www.notrealdomain.fake"
+        result = network.get_url_domain_name(fake_url)
+        self.assertIn(result, fake_url)
+
+    def test_invalid_url(self):
+        fake_url = "invalid-url"
+        result = network.get_url_domain_name(fake_url)
+        self.assertIsNone(result)
