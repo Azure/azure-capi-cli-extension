@@ -57,6 +57,11 @@ parameters:
   - name: --output-path -p
     type: string
     short-summary: Where to save helper commands when they are downloaded
+  - name: --pivot
+    type: bool
+    short-summary: Move provider and CAPI resources to workload cluster.
+    long-summary: |
+       Learn more about pivot at https://cluster-api.sigs.k8s.io/clusterctl/commands/move.html
   - name: --resource-group -g
     type: string
     long-summary: |
