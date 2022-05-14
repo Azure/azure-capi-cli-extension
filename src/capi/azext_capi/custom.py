@@ -483,6 +483,7 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         "AZURE_CLIENT_ID": os.environ["AZURE_CLIENT_ID"],
         "AZURE_CLUSTER_IDENTITY_SECRET_NAME": os.environ["AZURE_CLUSTER_IDENTITY_SECRET_NAME"],
         "AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE": os.environ["AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE"],
+        "AZURE_SSH_PUBLIC_KEY": os.environ["AZURE_SSH_PUBLIC_KEY"],
     }
 
     filename = capi_name + ".yaml"
