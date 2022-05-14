@@ -374,7 +374,7 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         node_machine_type=os.environ.get("AZURE_NODE_MACHINE_TYPE", "Standard_D2s_v3"),
         node_machine_count=os.environ.get("AZURE_NODE_MACHINE_COUNT", 3),
         kubernetes_version=os.environ.get("AZURE_KUBERNETES_VERSION", "1.22.8"),
-        ssh_public_key=os.environ.get("AZURE_SSH_PUBLIC_KEY_B64", ""),
+        ssh_public_key=os.environ.get("AZURE_SSH_PUBLIC_KEY", ""),
         external_cloud_provider=False,
         management_cluster_name=None,
         management_cluster_resource_group_name=None,
@@ -423,14 +423,17 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
     env = Environment(loader=PackageLoader("azext_capi", "templates"), auto_reload=False, undefined=StrictUndefined)
     logger.debug("Available templates: %s", env.list_templates())
     template = env.get_template("base.jinja")
-
+    ssh_public_key_b64 = ""
+    if ssh_public_key:
+        ssh_public_key_b64 = base64.b64encode(ssh_public_key.encode("utf-8"))
+        ssh_public_key_b64 = str(ssh_public_key_b64, "utf-8")
     args = {
         "AZURE_CONTROL_PLANE_MACHINE_TYPE": control_plane_machine_type,
         "AZURE_LOCATION": location,
         "AZURE_NODE_MACHINE_TYPE": node_machine_type,
         "AZURE_RESOURCE_GROUP": resource_group_name,
-        "AZURE_SUBSCRIPTION_ID": os.environ['AZURE_SUBSCRIPTION_ID'],
-        "AZURE_SSH_PUBLIC_KEY_B64": ssh_public_key,
+        "AZURE_SSH_PUBLIC_KEY": ssh_public_key,
+        "AZURE_SSH_PUBLIC_KEY_B64": ssh_public_key_b64,
         "AZURE_VNET_NAME": vnet_name,
         "CLUSTER_NAME": capi_name,
         "CONTROL_PLANE_MACHINE_COUNT": control_plane_machine_count,
@@ -441,6 +444,7 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         "WORKER_MACHINE_COUNT": node_machine_count,
         "NODEPOOL_TYPE": "machinepool" if machinepool else "machinedeployment",
         "CLUSTER_IDENTITY_NAME": os.environ["CLUSTER_IDENTITY_NAME"],
+        "AZURE_SUBSCRIPTION_ID": os.environ['AZURE_SUBSCRIPTION_ID'],
         "AZURE_TENANT_ID": os.environ["AZURE_TENANT_ID"],
         "AZURE_CLIENT_ID": os.environ["AZURE_CLIENT_ID"],
         "AZURE_CLUSTER_IDENTITY_SECRET_NAME": os.environ["AZURE_CLUSTER_IDENTITY_SECRET_NAME"],

@@ -10,10 +10,10 @@ spec:
       users:
       - name: capi
         groups: Administrators
-        {% if AZURE_SSH_PUBLIC_KEY %}
+        {%- if AZURE_SSH_PUBLIC_KEY %}
         sshAuthorizedKeys:
         - {{AZURE_SSH_PUBLIC_KEY}}
-        {% endif %}
+        {%- endif %}
       preKubeadmCommands: []
       postKubeadmCommands:
         - nssm set kubelet start SERVICE_AUTO_START
