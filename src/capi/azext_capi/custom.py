@@ -6,7 +6,6 @@
 """This module implements the behavior of `az capi` commands."""
 
 # pylint: disable=missing-docstring
-# pylint: disable=too-many-lines
 
 import base64
 import json
@@ -28,11 +27,11 @@ from knack.prompting import prompt_choice_list, prompt_y_n
 from knack.prompting import prompt as prompt_method
 from msrestazure.azure_exceptions import CloudError
 
-from .helpers.network_helpers import add_kubeconfig_to_command, has_kind_prefix
+from .helpers.generic import add_kubeconfig_to_command, has_kind_prefix
 from .helpers.logger import is_verbose, logger
 from .helpers.spinner import Spinner
-from .helpers.run_command_helpers import try_command_with_spinner, run_shell_command
-from .helpers.binary_helpers import check_clusterctl, check_kubectl, check_kind
+from .helpers.run_command import try_command_with_spinner, run_shell_command
+from .helpers.binary import check_clusterctl, check_kubectl, check_kind
 
 MANAGEMENT_RG_NAME = "MANAGEMENT_RG_NAME"
 KUBECONFIG = "KUBECONFIG"

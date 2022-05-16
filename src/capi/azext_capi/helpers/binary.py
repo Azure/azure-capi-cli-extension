@@ -15,7 +15,7 @@ from azure.cli.core.azclierror import ValidationError
 from knack.prompting import prompt_y_n
 from six.moves.urllib.request import urlopen  # pylint: disable=import-error
 
-from azext_capi.helpers.network_helpers import ssl_context, urlretrieve
+from azext_capi.helpers.network import ssl_context, urlretrieve
 from azext_capi._params import _get_default_install_location
 from azext_capi.helpers.logger import logger
 from azext_capi.helpers.spinner import Spinner
