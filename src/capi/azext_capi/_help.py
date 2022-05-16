@@ -32,6 +32,10 @@ parameters:
   - name: --ephemeral-disks -e
     type: string
     short-summary: Use ephemeral disks
+  - name: --bootstrap-commands
+    type: string
+    long-summary: A YAML file with user-defined pre- and post-VM bootstrap commands
+    short-summary: YAML file with user-defined VM bootstrap commands
   - name: --external-cloud-provider
     type: bool
     short-summary: Use the external (AKA "out-of-tree") Azure cloud-provider

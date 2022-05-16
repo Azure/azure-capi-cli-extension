@@ -13,6 +13,7 @@ import os
 import subprocess
 import time
 import re
+import yaml
 
 import azext_capi.helpers.kubectl as kubectl_helpers
 
@@ -351,6 +352,42 @@ def render_custom_cluster_template(template, filename, args=None):
         raise RequiredArgumentMissingError(msg) from err
 
 
+def get_default_bootstrap_commands(windows=False):
+    '''
+    Returns dictonary with base pre/post bootstrap vm commands
+    '''
+    pre_bootstrap_cmds = [] if windows else []
+    post_bootstrap_cmds = ["nssm set kubelet start SERVICE_AUTO_START",
+                           "powershell C:/defender-exclude-calico.ps1"] if windows else []
+    bootstrap_cmds = {
+        "pre": pre_bootstrap_cmds,
+        "post": post_bootstrap_cmds
+    }
+    return bootstrap_cmds
+
+
+def parse_bootstrap_commands_from_file(file_path):
+    pre_commands = []
+    post_commands = []
+    if not os.path.isfile(file_path):
+        raise InvalidArgumentValueError("Invalid boostrap command file")
+    file_result = None
+    with open(file_path, "r", encoding="utf-8") as file:
+        file_result = yaml.load(file, Loader=yaml.SafeLoader)
+    for key, value in file_result.items():
+        if not value:
+            continue
+        if key == "preBootstrapCommands":
+            pre_commands = [value] if isinstance(value, str) else value
+        elif key == "postBootstrapCommands":
+            post_commands = [value] if isinstance(value, str) else value
+    result = {
+        "pre": pre_commands,
+        "post": post_commands
+    }
+    return result
+
+
 # pylint: disable=inconsistent-return-statements
 def create_workload_cluster(  # pylint: disable=unused-argument,too-many-arguments,too-many-locals,too-many-statements
         cmd,
@@ -372,6 +409,7 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         windows=False,
         pivot=False,
         user_provided_template=None,
+        bootstrap_commands=None,
         yes=False):
 
     if user_provided_template:
@@ -394,6 +432,12 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
             defined_args = " ,".join(defined_args)
             error_msg = f'The following arguments are incompatible with "--template":\n{defined_args}'
             raise MutuallyExclusiveArgumentError(error_msg)
+
+    bootstrap_cmds = get_default_bootstrap_commands(windows)
+    if bootstrap_commands:
+        kubeadm_file_commands = parse_bootstrap_commands_from_file(bootstrap_commands)
+        bootstrap_cmds["pre"] += kubeadm_file_commands["pre"]
+        bootstrap_cmds["post"] += kubeadm_file_commands["post"]
 
     # Check if the RG already exists and that it's consistent with the location
     # specified. CAPZ will actually create (and delete) the RG if needed.
@@ -453,6 +497,8 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         "AZURE_CLIENT_ID": os.environ["AZURE_CLIENT_ID"],
         "AZURE_CLUSTER_IDENTITY_SECRET_NAME": os.environ["AZURE_CLUSTER_IDENTITY_SECRET_NAME"],
         "AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE": os.environ["AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE"],
+        "PRE_BOOTSTRAP_CMDS": bootstrap_cmds["pre"],
+        "POST_BOOTSTRAP_CMDS": bootstrap_cmds["post"],
     }
 
     if not user_provided_template:
