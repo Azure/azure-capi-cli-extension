@@ -34,6 +34,7 @@ parameters:
     short-summary: Use ephemeral disks
   - name: --external-cloud-provider
     type: bool
+    short-summary: Use the external (AKA "out-of-tree") Azure cloud-provider
   - name: --kubernetes-version -k
     type: string
     short-summary: Version of Kubernetes to use
@@ -44,9 +45,9 @@ parameters:
     long-summary: |
         If not specified, the location of the --resource-group will be used.
         Required if --resource-group is not specified or does not yet exist
-  - name: --machinepool
+  - name: --machinepool -m
     type: bool
-    short-summary: Use experimental MachinePools instead of MachineSets
+    short-summary: Use experimental MachinePools instead of MachineDeployments
   - name: --management-cluster-name
     type: string
     short-summary: Name for management cluster.
@@ -66,6 +67,9 @@ parameters:
     type: string
     long-summary: |
         If not specified, the value of --name will be used
+  - name: --ssh-public-key
+    type: string
+    short-summary: Public key contents to install on node VMs for SSH access.
   - name: --vnet-name
     type: string
     short-summary: Name of the Virtual Network to create
@@ -83,7 +87,7 @@ long-summary: |
 
 helps['capi install'] = """
 type: command
-short-summary: installs all needed tools
+short-summary: Install all needed tools.
 parameters:
   - name: --all -a
     type: bool
