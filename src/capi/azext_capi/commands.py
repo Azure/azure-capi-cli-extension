@@ -24,6 +24,7 @@ def load_command_table(self, _):
         g.custom_command('show', 'show_workload_cluster',
                          table_transformer=CLUSTER_TABLE_FORMAT)
         g.custom_command('update', 'update_workload_cluster')
+        g.custom_command('install', 'install_tools')
 
     with self.command_group('capi management', is_preview=True) as g:
         g.custom_command('create', 'create_management_cluster')

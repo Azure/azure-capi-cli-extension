@@ -41,6 +41,9 @@ def load_arguments(self, _):
                      options_list=['--management-cluster-resource-group-name', '-mg'],
                      help="Resource group name of management cluster")
 
+    with self.argument_context('capi install') as ctx:
+        ctx.argument('all_tools', capi_name_type, options_list=['--all', '-a'])
+
 
 def get_virtualenv():
     return os.getenv("VIRTUAL_ENV")

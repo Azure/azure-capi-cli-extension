@@ -81,6 +81,14 @@ long-summary: |
     See https://capz.sigs.k8s.io/ for more information.
 """
 
+helps['capi install'] = """
+type: command
+short-summary: installs all needed tools
+parameters:
+  - name: --all -a
+    type: bool
+"""
+
 helps['capi show'] = """
 type: command
 short-summary: Show details of a workload cluster.
