@@ -7,10 +7,14 @@
 This module contains helper functions for the az capi extension.
 """
 
-
-def add_kubeconfig_to_command(kubeconfig=None):
-    return ["--kubeconfig", kubeconfig] if kubeconfig else []
+import re
 
 
 def has_kind_prefix(inpt_str):
+    """Returns bool if input has 'kind-' prefix"""
     return inpt_str.startswith("kind-")
+
+
+def match_output(output, regexp=None):
+    """Returns regex search result against given parameter"""
+    return re.search(regexp, output) if regexp is not None else None

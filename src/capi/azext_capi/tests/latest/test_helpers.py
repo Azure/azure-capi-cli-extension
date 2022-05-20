@@ -16,7 +16,8 @@ from azure.cli.core.azclierror import ResourceNotFoundError
 
 import azext_capi.helpers.network as network
 import azext_capi.helpers.generic as generic
-from azext_capi.custom import check_kubectl_namespace, create_resource_group, create_new_management_cluster, find_attribute_in_context, find_kubectl_current_context, get_user_prompt_or_default, management_cluster_components_missing_matching_expressions, _find_default_cluster
+from azext_capi.custom import create_resource_group, create_new_management_cluster, get_user_prompt_or_default, management_cluster_components_missing_matching_expressions
+from azext_capi.helpers.kubectl import check_kubectl_namespace, find_attribute_in_context, find_kubectl_current_context, find_default_cluster, add_kubeconfig_to_command
 from azext_capi.helpers.run_command import try_command_with_spinner, run_shell_command
 
 
@@ -65,12 +66,12 @@ class FindDefaultCluster(unittest.TestCase):
 
     def setUp(self):
         self.cmd = Mock()
-        self.match_output_patch = patch('azext_capi.custom.match_output')
+        self.match_output_patch = patch('azext_capi.helpers.kubectl.match_output')
         self.match_output_mock = self.match_output_patch.start()
         self.match_output_mock.return_value = None
         self.addCleanup(self.match_output_patch.stop)
 
-        self.run_shell_command_patch = patch('azext_capi.custom.run_shell_command')
+        self.run_shell_command_patch = patch('azext_capi.helpers.kubectl.run_shell_command')
         self.run_shell_command_mock = self.run_shell_command_patch.start()
         self.addCleanup(self.run_shell_command_patch.stop)
 
@@ -78,7 +79,7 @@ class FindDefaultCluster(unittest.TestCase):
     def test_found_k8s_cluster_running_state(self):
         self.run_shell_command_mock.return_value = "fake_return"
         self.match_output_mock.return_value = Mock()
-        result = _find_default_cluster()
+        result = find_default_cluster()
         self.match_output_mock.assert_called_once()
         self.assertTrue(result)
 
@@ -86,13 +87,13 @@ class FindDefaultCluster(unittest.TestCase):
     def test_found_cluster_non_running_state(self):
         self.run_shell_command_mock.return_value = "fake_return"
         with self.assertRaises(ResourceNotFoundError):
-            _find_default_cluster()
+            find_default_cluster()
 
     # Test error with command ran
     def test_encouter_error_with_ran_command(self):
         self.run_shell_command_mock.side_effect = subprocess.CalledProcessError(3, ['fakecommand'])
         with self.assertRaises(subprocess.CalledProcessError):
-            _find_default_cluster()
+            find_default_cluster()
 
 
 class CreateNewManagementCluster(unittest.TestCase):
@@ -154,7 +155,7 @@ class FindKubectlCurrentContext(unittest.TestCase):
 
     def setUp(self):
         self.context_name = "fake-context"
-        self.run_shell_patch = patch('azext_capi.custom.run_shell_command')
+        self.run_shell_patch = patch('azext_capi.helpers.kubectl.run_shell_command')
         self.run_shell_mock = self.run_shell_patch.start()
         self.run_shell_mock.return_value = None
         self.addCleanup(self.run_shell_patch.stop)
@@ -184,7 +185,7 @@ class FindAttributeInContext(unittest.TestCase):
 
     def setUp(self):
         self.context_name = "context-name-fake"
-        self.run_shell_patch = patch('azext_capi.custom.run_shell_command')
+        self.run_shell_patch = patch('azext_capi.helpers.kubectl.run_shell_command')
         self.run_shell_mock = self.run_shell_patch.start()
         self.run_shell_mock.return_value = None
         self.addCleanup(self.run_shell_patch.stop)
@@ -234,7 +235,7 @@ class GetUserPromptMethodTest(unittest.TestCase):
         self.fake_input = "fake-input"
         self.fake_prompt = Mock()
         self.fake_default_value = Mock()
-        self.prompt_method_patch = patch('azext_capi.custom.prompt_method')
+        self.prompt_method_patch = patch('azext_capi.helpers.prompt.prompt_method')
         self.prompt_method_mock = self.prompt_method_patch.start()
         self.prompt_method_mock.return_value = None
         self.addCleanup(self.prompt_method_patch.stop)
@@ -316,11 +317,11 @@ class CheckKubectlNamespaceTest(unittest.TestCase):
         self.namespace = "fake"
         self.command = ["fake-command"]
 
-        self.run_shell_command_patch = patch('azext_capi.custom.run_shell_command')
+        self.run_shell_command_patch = patch('azext_capi.helpers.kubectl.run_shell_command')
         self.run_shell_command_mock = self.run_shell_command_patch.start()
         self.addCleanup(self.run_shell_command_patch.stop)
 
-        self.match_output_patch = patch('azext_capi.custom.match_output')
+        self.match_output_patch = patch('azext_capi.helpers.kubectl.match_output')
         self.match_output_mock = self.match_output_patch.start()
         self.addCleanup(self.match_output_patch.stop)
 
@@ -374,12 +375,12 @@ class AddKubeconfigFlagMethodTest(unittest.TestCase):
 
     def test_no_empty_kubeconfig(self):
         fake_kubeconfig = "fake-kubeconfig"
-        output = generic.add_kubeconfig_to_command(fake_kubeconfig)
+        output = add_kubeconfig_to_command(fake_kubeconfig)
         self.assertEquals(len(output), 2)
         self.assertEquals(output[1], fake_kubeconfig)
 
     def test_no_kubeconfig_argument(self):
-        output = generic.add_kubeconfig_to_command()
+        output = add_kubeconfig_to_command()
         self.assertEquals(len(output), 0)
 
 
