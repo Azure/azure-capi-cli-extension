@@ -28,7 +28,7 @@ def load_arguments(self, _):
         ctx.argument('capi_name', capi_name_type, options_list=['--name', '-n'],
                      completer=get_workflow_clusters_completion_list)
         ctx.argument('control_plane_machine_type', completer=get_vm_size_completion_list)
-        ctx.argument('ephemeral_disks', options_list=['--ephemeral_disks', '-e'])
+        ctx.argument('ephemeral_disks', options_list=['--ephemeral-disks', '-e'])
         ctx.argument('kubernetes_version', options_list=['--kubernetes-version', '-k'],
                      completer=get_kubernetes_version_completion_list)
         ctx.argument('machinepool', options_list=['--machinepool', '-m'])
