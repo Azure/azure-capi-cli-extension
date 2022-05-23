@@ -619,6 +619,7 @@ def reset_current_context_and_attributes():
     user = find_attribute_in_context(current_context, "user")
     delete_kubeconfig_attribute(cluster_name, "cluster")
     delete_kubeconfig_attribute(user, "user")
+    delete_kubeconfig_attribute(current_context, "context")
     unset_kubectl_current_context()
 
 
@@ -709,17 +710,61 @@ def get_kubeconfig(capi_name):
     return f"Wrote kubeconfig file to {filename} "
 
 
-def delete_workload_cluster(cmd, capi_name, yes=False):
+def get_azure_cluster(cluster_name, kubeconfig=None):
+    command = ["kubectl", "get", "AzureCluster", cluster_name, "-o", "json"]
+    command += add_kubeconfig_to_command(kubeconfig)
+    try:
+        return run_shell_command(command)
+    except subprocess.CalledProcessError as err:
+        raise InvalidArgumentValueError(f"Could not find {cluster_name}") from err
+
+
+def get_azure_resource_group_from_azure_cluster(cluster_name, kubeconfig=None):
+    output = get_azure_cluster(cluster_name, kubeconfig)
+    output = json.loads(output)
+    return output["spec"]["resourceGroup"]
+
+
+def delete_workload_cluster(cmd, capi_name, resource_group_name=None, yes=False):
     exit_if_no_management_cluster()
     msg = f'Do you want to delete this Kubernetes cluster "{capi_name}"?'
+    command = ["kubectl", "delete", "cluster", capi_name]
+    is_self_managed = is_self_managed_cluster(capi_name)
+    if is_self_managed:
+        if not resource_group_name:
+            resource_group_name = get_azure_resource_group_from_azure_cluster(capi_name)
+        msg = f'Do you want to delete the {capi_name} Kubernetes cluster and {resource_group_name} resource group?'
+        command = ["az", "group", "delete", "-n", resource_group_name, '-y']
     if not yes and not prompt_y_n(msg, default="n"):
         return
-    cmd = ["kubectl", "delete", "cluster", capi_name]
-    try:
-        output = subprocess.check_output(cmd, universal_newlines=True)
-        logger.info("%s returned:\n%s", " ".join(cmd), output)
-    except subprocess.CalledProcessError as err:
-        raise UnclassifiedUserFault("Couldn't delete workload cluster") from err
+    begin_msg = "Deleting workload cluster"
+    end_msg = "✓ Deleted workload cluster"
+    err_msg = "Couldn't delete workload cluster"
+    try_command_with_spinner(cmd, command, begin_msg, end_msg, err_msg)
+    if is_self_managed:
+        reset_current_context_and_attributes()
+
+
+def get_ports_cluster(kubeconfig=None):
+    output = get_kubectl_cluster_info(kubeconfig)
+    match = re.findall(r"(?<=is running at )[^\s]{1,}", output)
+    result = {
+        "control_plane": match[0],
+        "coredns": match[1]
+    }
+    return result
+
+
+def is_self_managed_cluster(cluster_name):
+    management_cluster_ports = get_ports_cluster()
+    workload_cluster_ports = get_ports_cluster(f"{cluster_name}.kubeconfig")
+    return management_cluster_ports == workload_cluster_ports
+
+
+def get_kubectl_cluster_info(kubeconfig=None):
+    command = ["kubectl", "cluster-info"]
+    command += add_kubeconfig_to_command(kubeconfig)
+    return run_shell_command(command)
 
 
 def list_workload_clusters(cmd):  # pylint: disable=unused-argument
