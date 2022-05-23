@@ -52,7 +52,7 @@ def check_kubectl(cmd, install=False):
 
 def check_binary(cmd, binary_name, install_binary_method, install=False):
     if not which(binary_name):
-        logger.info(f"{binary_name} was not found.")
+        logger.info("%s was not found.", binary_name)
         if install or prompt_y_n(f"Download and install {binary_name}?", default="n"):
             with Spinner(cmd, f"Downloading {binary_name}", f"✓ Downloaded {binary_name}"):
                 install_binary_method(cmd)

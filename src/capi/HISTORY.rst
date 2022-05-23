@@ -3,6 +3,16 @@
 Release History
 ===============
 
+0.0.5
+++++++
+
+* TBD!
+
+0.0.4
+++++++
+
+* Focus on "fire-and-forget" mode
+
 0.0.3
 ++++++
 * Rework UX for `az capi create` as a checklist
