@@ -10,9 +10,10 @@
 import base64
 import json
 import os
-import re
 import subprocess
 import time
+
+import azext_capi.helpers.kubectl as kubectl_helpers
 
 from azure.cli.core import get_default_cli
 from azure.cli.core.api import get_config_dir
@@ -24,17 +25,16 @@ from azure.cli.core.azclierror import UnclassifiedUserFault
 from jinja2 import Environment, PackageLoader, StrictUndefined
 from jinja2.exceptions import UndefinedError
 from knack.prompting import prompt_choice_list, prompt_y_n
-from knack.prompting import prompt as prompt_method
 from msrestazure.azure_exceptions import CloudError
 
-from .helpers.generic import add_kubeconfig_to_command, has_kind_prefix
-from .helpers.logger import is_verbose, logger
+from .helpers.generic import has_kind_prefix
+from .helpers.logger import logger
 from .helpers.spinner import Spinner
-from .helpers.run_command import try_command_with_spinner, run_shell_command
+from .helpers.run_command import run_shell_command, try_command_with_spinner
 from .helpers.binary import check_clusterctl, check_kubectl, check_kind
-
-MANAGEMENT_RG_NAME = "MANAGEMENT_RG_NAME"
-KUBECONFIG = "KUBECONFIG"
+from .helpers.prompt import get_cluster_name_by_user_prompt, get_user_prompt_or_default
+from .helpers.generic import match_output
+from .helpers.constants import MANAGEMENT_RG_NAME
 
 
 def init_environment(cmd, prompt=True, management_cluster_name=None,
@@ -45,7 +45,7 @@ def init_environment(cmd, prompt=True, management_cluster_name=None,
     pre_prompt = None
     try:
         find_management_cluster_retry(cmd)
-        cluster_name = find_cluster_in_current_context()
+        cluster_name = kubectl_helpers.find_cluster_in_current_context()
         if prompt and not prompt_y_n(f"Do you want to use {cluster_name} as the management cluster?"):
             use_new_cluster = True
         else:
@@ -96,7 +96,7 @@ def _create_azure_identity_secret(cmd, kubeconfig=None):
     error_msg = "Can't create Cluster Identity Secret"
     command = ["kubectl", "create", "secret", "generic", secret_name, "--from-literal",
                f"clientSecret={azure_client_secret}", "--namespace", secret_namespace]
-    command += add_kubeconfig_to_command(kubeconfig)
+    command += kubectl_helpers.add_kubeconfig_to_command(kubeconfig)
     try_command_with_spinner(cmd, command, begin_msg, end_msg, error_msg, True)
 
 
@@ -107,51 +107,8 @@ def _install_capi_provider_components(cmd, kubeconfig=None):
     end_msg = "✓ Initialized management cluster"
     error_msg = "Couldn't install CAPI provider components in current cluster"
     command = ["clusterctl", "init", "--infrastructure", "azure"]
-    command += add_kubeconfig_to_command(kubeconfig)
+    command += kubectl_helpers.add_kubeconfig_to_command(kubeconfig)
     try_command_with_spinner(cmd, command, begin_msg, end_msg, error_msg)
-
-
-def find_kubectl_current_context():
-    command = ["kubectl", "config", "current-context"]
-    output = None
-    try:
-        output = run_shell_command(command)
-        output = output.strip()
-    except subprocess.CalledProcessError as err:
-        if "current-context is not set" not in err.stdout:
-            raise
-    return output
-
-
-def find_attribute_in_context(context_name, attribute="cluster"):
-    command = ["kubectl", "config", "get-contexts", context_name, "--no-headers"]
-    result = None
-    try:
-        output = run_shell_command(command)
-        output = output.split()
-        if attribute == "cluster":
-            result = output[2]
-        elif attribute == "user":
-            result = output[3]
-        elif attribute == "namespace":
-            result = output[4]
-    except subprocess.CalledProcessError:
-        pass
-    return result
-
-
-def find_cluster_in_current_context():
-    current_context = find_kubectl_current_context()
-    cluster_name = None
-    if current_context:
-        cluster_name = find_attribute_in_context(current_context, "cluster")
-        if not cluster_name:
-            logger.error("No cluster in context %s", current_context)
-    else:
-        logger.error("No kubectl current-context found")
-    if not cluster_name:
-        logger.warning("Proceeding to create a new management cluster")
-    return cluster_name
 
 
 def create_resource_group(cmd, rg_name, location, yes=False):
@@ -169,13 +126,13 @@ def create_resource_group(cmd, rg_name, location, yes=False):
 def create_management_cluster(cmd, cluster_name=None, resource_group_name=None, location=None,
                               yes=False):
     check_prereqs(cmd)
-    existing_cluster = find_cluster_in_current_context()
+    existing_cluster = kubectl_helpers.find_cluster_in_current_context()
     found_cluster = False
     if existing_cluster:
         msg = f'Do you want to initialize Cluster API on the current cluster {existing_cluster}?'
         if yes or prompt_y_n(msg, default="n"):
             try:
-                _find_default_cluster()
+                kubectl_helpers.find_default_cluster()
                 found_cluster = True
             except subprocess.CalledProcessError as err:
                 raise UnclassifiedUserFault("Can't locate a Kubernetes cluster") from err
@@ -185,33 +142,6 @@ def create_management_cluster(cmd, cluster_name=None, resource_group_name=None, 
     set_azure_identity_secret_env_vars()
     _create_azure_identity_secret(cmd)
     _install_capi_provider_components(cmd)
-
-
-def get_cluster_name_by_user_prompt(default_name):
-    prompt = "Please name the management cluster"
-    regex_validator = "^[a-z0-9.-]+$"
-    invalid_msg = "Invalid name for cluster: only lowercase characters, numbers, dashes and periods allowed"
-    return get_user_prompt_or_default(prompt, default_name, regex_validator, invalid_msg)
-
-
-def get_user_prompt_or_default(prompt_text, default_value, match_expression=None,
-                               invalid_prompt=None, skip_prompt=False):
-
-    if skip_prompt:
-        return default_value
-
-    prompt = f"{prompt_text} [Default {default_value}]: "
-    while True:
-        user_input = prompt_method(prompt)
-        user_input = user_input.strip()
-        if user_input == "":
-            return default_value
-        if match_expression and re.match(match_expression, user_input):
-            return user_input
-        if not match_expression:
-            return user_input
-        if invalid_prompt:
-            logger.error(invalid_prompt)
 
 
 def create_aks_management_cluster(cmd, cluster_name, resource_group_name=None, location=None, yes=False):
@@ -280,8 +210,7 @@ def delete_management_cluster(cmd, yes=False):  # pylint: disable=unused-argumen
     command = ["clusterctl", "delete", "--all",
                "--include-crd", "--include-namespace"]
     try:
-        output = subprocess.check_output(command, universal_newlines=True)
-        logger.info("%s returned:\n%s", " ".join(command), output)
+        run_shell_command(command)
     except subprocess.CalledProcessError as err:
         raise UnclassifiedUserFault("Couldn't delete components from management cluster") from err
     namespaces = [
@@ -293,8 +222,7 @@ def delete_management_cluster(cmd, yes=False):  # pylint: disable=unused-argumen
     ]
     command = ["kubectl", "delete", "namespace", "--ignore-not-found"] + namespaces
     try:
-        output = subprocess.check_output(command, universal_newlines=True)
-        logger.info("%s returned:\n%s", " ".join(command), output)
+        run_shell_command(command)
     except subprocess.CalledProcessError as err:
         raise UnclassifiedUserFault("Couldn't delete namespaces from management cluster") from err
 
@@ -318,8 +246,7 @@ def show_management_cluster(_cmd, yes=False):
     command = ["kubectl", "config", "get-contexts",
                "--no-headers", "--output", "name"]
     try:
-        output = subprocess.check_output(command, universal_newlines=True)
-        logger.info("%s returned:\n%s", " ".join(command), output)
+        output = run_shell_command(command)
         contexts = output.splitlines()
         logger.info(contexts)
     except subprocess.CalledProcessError as err:
@@ -348,8 +275,7 @@ def update_management_cluster(cmd, yes=False):
         "v1alpha3",
     ]
     try:
-        output = subprocess.check_output(command, universal_newlines=True)
-        logger.info("%s returned:\n%s", " ".join(command), output)
+        run_shell_command(command)
     except subprocess.CalledProcessError as err:
         raise UnclassifiedUserFault("Couldn't upgrade management cluster") from err
 
@@ -467,12 +393,9 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
     end_msg = f'✓ Created workload cluster "{capi_name}"'
     with Spinner(cmd, begin_msg, end_msg):
         command = ["kubectl", "apply", "-f", filename]
-        # if --verbose, don't capture stderr
-        stderr = None if is_verbose() else subprocess.STDOUT
         for _ in range(attempts):
             try:
-                output = subprocess.check_output(command, universal_newlines=True, stderr=stderr)
-                logger.info("%s returned:\n%s", " ".join(command), output)
+                run_shell_command(command)
                 break
             except subprocess.CalledProcessError as err:
                 logger.info(err)
@@ -487,7 +410,7 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
     with Spinner(cmd, "Waiting for access to workload cluster", "✓ Workload cluster is accessible"):
         for _ in range(attempts):
             try:
-                get_kubeconfig(capi_name)
+                kubectl_helpers.get_kubeconfig(capi_name)
                 break
             except UnclassifiedUserFault:
                 time.sleep(delay)
@@ -521,7 +444,7 @@ clusterctl get kubeconfig {capi_name}
 
     # Wait for all nodes to be ready before returning
     with Spinner(cmd, "Waiting for workload cluster nodes to be ready", "✓ Workload cluster is ready"):
-        wait_for_nodes(workload_cfg)
+        kubectl_helpers.wait_for_nodes(workload_cfg)
 
     if pivot:
         pivot_cluster(cmd, workload_cfg)
@@ -540,7 +463,7 @@ def pivot_cluster(cmd, target_cluster_kubeconfig):
         _install_capi_provider_components(cmd, target_cluster_kubeconfig)
 
     with Spinner(cmd, "Waiting for workload cluster machines to be ready", "✓ Workload cluster machines are ready"):
-        wait_for_machines()
+        kubectl_helpers.wait_for_machines()
 
     command = ["clusterctl", "move", "--to-kubeconfig", target_cluster_kubeconfig]
     begin_msg = "Moving cluster objects into target cluster"
@@ -548,7 +471,7 @@ def pivot_cluster(cmd, target_cluster_kubeconfig):
     error_msg = "Could not complete clusterctl move action"
     try_command_with_spinner(cmd, command, begin_msg, end_msg, error_msg, True)
 
-    cluster_name = find_cluster_in_current_context()
+    cluster_name = kubectl_helpers.find_cluster_in_current_context()
     if has_kind_prefix(cluster_name):
         delete_kind_cluster_from_current_context(cmd)
     else:
@@ -559,26 +482,9 @@ def pivot_cluster(cmd, target_cluster_kubeconfig):
 
     # Merge workload cluster kubeconfig and default kubeconfig.
     # To preverse any previous existing contexts
-    merge_kubeconfig(target_cluster_kubeconfig)
+    kubectl_helpers.merge_kubeconfig(target_cluster_kubeconfig)
     logger.warning("Completed Pivot Process")
     return True
-
-
-def merge_kubeconfig(kubeconfig):
-    home = os.environ["HOME"]
-    config_path = f"{home}/.kube/config"
-    os.environ[KUBECONFIG] = f"{kubeconfig}:{config_path}"
-    output = get_default_kubeconfig()
-    filename = "config"
-    with open(filename, "w", encoding="utf-8") as kubeconfig_file:
-        kubeconfig_file.write(output)
-    command = ["mv", filename, config_path]
-    run_shell_command(command)
-
-
-def get_default_kubeconfig():
-    command = ["kubectl", "config", "view", "--flatten"]
-    return run_shell_command(command)
 
 
 def delete_kind_cluster(cmd, name):
@@ -590,7 +496,7 @@ def delete_kind_cluster(cmd, name):
 
 
 def delete_kind_cluster_from_current_context(cmd):
-    cluster_name = find_cluster_in_current_context()
+    cluster_name = kubectl_helpers.find_cluster_in_current_context()
     # remove prefix
     if has_kind_prefix(cluster_name):
         cluster_name = cluster_name[5:]
@@ -609,28 +515,8 @@ def delete_aks_cluster(cmd, name, resource_group):
     error_msg = "Could not delete resource group"
     try_command_with_spinner(cmd, command, begin_msg, end_msg, error_msg)
     # Need to clean kubeconfig context
-    reset_current_context_and_attributes()
+    kubectl_helpers.reset_current_context_and_attributes()
     return True
-
-
-def reset_current_context_and_attributes():
-    current_context = find_kubectl_current_context()
-    cluster_name = find_attribute_in_context(current_context, "cluster")
-    user = find_attribute_in_context(current_context, "user")
-    delete_kubeconfig_attribute(cluster_name, "cluster")
-    delete_kubeconfig_attribute(user, "user")
-    delete_kubeconfig_attribute(current_context, "context")
-    unset_kubectl_current_context()
-
-
-def delete_kubeconfig_attribute(name, attribute="context"):
-    command = ["kubectl", "config", f"delete-{attribute}", name]
-    run_shell_command(command)
-
-
-def unset_kubectl_current_context():
-    command = ["kubectl", "config", "unset", "current-context"]
-    run_shell_command(command)
 
 
 def apply_calico_manifest(cmd, calico_manifest, workload_cfg,
@@ -638,91 +524,15 @@ def apply_calico_manifest(cmd, calico_manifest, workload_cfg,
     attempts, delay = 100, 3
     with Spinner(cmd, spinner_enter_message, spinner_exit_message):
         command = ["kubectl", "apply", "-f", calico_manifest, "--kubeconfig", workload_cfg]
-        # if --verbose, don't capture stderr
-        stderr = None if is_verbose() else subprocess.STDOUT
         for _ in range(attempts):
             try:
-                subprocess.check_output(command, universal_newlines=True, stderr=stderr)
+                run_shell_command(command)
                 break
             except subprocess.CalledProcessError as err:
                 logger.info(err)
                 time.sleep(delay)
         else:
             raise ResourceNotFoundError(error_message)
-
-
-def find_kubectl_resource_names(resource_type, error_msg, kubeconfig=None):
-    command = ["kubectl", "get", resource_type, "--output", "name"]
-    command += add_kubeconfig_to_command(kubeconfig)
-    try:
-        return run_shell_command(command).splitlines()
-    except subprocess.CalledProcessError as err:
-        raise UnclassifiedUserFault(error_msg) from err
-
-
-def find_nodes(kubeconfig):
-    error_msg = "Couldn't get nodes of workload cluster"
-    return find_kubectl_resource_names("nodes", error_msg, kubeconfig)
-
-
-def wait_for_nodes(kubeconfig):
-    error_msg = "Not all cluster nodes are Ready after 5 minutes."
-    wait_for_resource_ready(find_nodes, error_msg, kubeconfig)
-
-
-def wait_for_resource_ready(find_resources, error_msg, kubeconfig=None,):
-    command = ["kubectl", "wait", "--for", "condition=Ready", "--timeout", "10s"]
-    command += add_kubeconfig_to_command(kubeconfig)
-    timeout = 60 * 5
-    start = time.time()
-    while time.time() < start + timeout:
-        command += find_resources(kubeconfig)
-        try:
-            run_shell_command(command)
-            return
-        except subprocess.CalledProcessError as err:
-            logger.info(err)
-            time.sleep(5)
-    raise ResourceNotFoundError(error_msg)
-
-
-def wait_for_machines(kubeconfig=None):
-    error_msg = "Not all machines are Ready after 5 minutes."
-    wait_for_resource_ready(find_machines, error_msg, kubeconfig)
-
-
-def find_machines(kubeconfig=None):
-    error_msg = "Couldn't get machines of cluster"
-    return find_kubectl_resource_names("machines", error_msg, kubeconfig)
-
-
-def get_kubeconfig(capi_name):
-    cmd = ["clusterctl", "get", "kubeconfig", capi_name]
-    # if --verbose, don't capture stderr
-    stderr = None if is_verbose() else subprocess.STDOUT
-    try:
-        output = subprocess.check_output(cmd, universal_newlines=True, stderr=stderr)
-    except subprocess.CalledProcessError as err:
-        raise UnclassifiedUserFault("Couldn't get kubeconfig") from err
-    filename = capi_name + ".kubeconfig"
-    with open(filename, "w", encoding="utf-8") as kubeconfig_file:
-        kubeconfig_file.write(output)
-    return f"Wrote kubeconfig file to {filename} "
-
-
-def get_azure_cluster(cluster_name, kubeconfig=None):
-    command = ["kubectl", "get", "AzureCluster", cluster_name, "-o", "json"]
-    command += add_kubeconfig_to_command(kubeconfig)
-    try:
-        return run_shell_command(command)
-    except subprocess.CalledProcessError as err:
-        raise InvalidArgumentValueError(f"Could not find {cluster_name}") from err
-
-
-def get_azure_resource_group_from_azure_cluster(cluster_name, kubeconfig=None):
-    output = get_azure_cluster(cluster_name, kubeconfig)
-    output = json.loads(output)
-    return output["spec"]["resourceGroup"]
 
 
 def delete_workload_cluster(cmd, capi_name, resource_group_name=None, yes=False):
@@ -742,37 +552,26 @@ def delete_workload_cluster(cmd, capi_name, resource_group_name=None, yes=False)
     err_msg = "Couldn't delete workload cluster"
     try_command_with_spinner(cmd, command, begin_msg, end_msg, err_msg)
     if is_self_managed:
-        reset_current_context_and_attributes()
+        kubectl_helpers.reset_current_context_and_attributes()
 
 
-def get_ports_cluster(kubeconfig=None):
-    output = get_kubectl_cluster_info(kubeconfig)
-    match = re.findall(r"(?<=is running at )[^\s]{1,}", output)
-    result = {
-        "control_plane": match[0],
-        "coredns": match[1]
-    }
-    return result
+def get_azure_resource_group_from_azure_cluster(cluster_name, kubeconfig=None):
+    output = kubectl_helpers.get_azure_cluster(cluster_name, kubeconfig)
+    output = json.loads(output)
+    return output["spec"]["resourceGroup"]
 
 
 def is_self_managed_cluster(cluster_name):
-    management_cluster_ports = get_ports_cluster()
-    workload_cluster_ports = get_ports_cluster(f"{cluster_name}.kubeconfig")
+    management_cluster_ports = kubectl_helpers.get_ports_cluster()
+    workload_cluster_ports = kubectl_helpers.get_ports_cluster(f"{cluster_name}.kubeconfig")
     return management_cluster_ports == workload_cluster_ports
-
-
-def get_kubectl_cluster_info(kubeconfig=None):
-    command = ["kubectl", "cluster-info"]
-    command += add_kubeconfig_to_command(kubeconfig)
-    return run_shell_command(command)
 
 
 def list_workload_clusters(cmd):  # pylint: disable=unused-argument
     exit_if_no_management_cluster()
     command = ["kubectl", "get", "clusters", "-o", "json"]
     try:
-        output = subprocess.check_output(command, universal_newlines=True)
-        logger.info("%s returned:\n%s", " ".join(command), output)
+        output = run_shell_command(command)
     except subprocess.CalledProcessError as err:
         raise UnclassifiedUserFault("Couldn't list workload clusters") from err
     return json.loads(output)
@@ -783,8 +582,7 @@ def show_workload_cluster(cmd, capi_name):  # pylint: disable=unused-argument
     # TODO: --output=table could print the output of `clusterctl describe` directly.
     command = ["kubectl", "get", "cluster", capi_name, "--output", "json"]
     try:
-        output = subprocess.check_output(command, stderr=subprocess.STDOUT, universal_newlines=True)
-        logger.info("%s returned:\n%s", " ".join(command), output)
+        output = run_shell_command(command)
     except subprocess.CalledProcessError as err:
         raise UnclassifiedUserFault(f"Couldn't get the workload cluster {capi_name}") from err
     return json.loads(output)
@@ -871,7 +669,7 @@ def management_cluster_components_missing_matching_expressions(output):
 
 
 def find_management_cluster():
-    _find_default_cluster()
+    kubectl_helpers.find_default_cluster()
     components = [
         {
             "namespace": "capz-system",
@@ -896,50 +694,8 @@ def find_management_cluster():
     ]
 
     for component in components:
-        check_kubectl_namespace(component["namespace"])
-        check_pods_status_by_namespace(component["namespace"], component["err_msg"], component["pod"])
-
-
-def check_kubectl_namespace(namespace):
-    cmd = ["kubectl", "get", "namespaces", namespace]
-    try:
-        output = run_shell_command(cmd)
-        match = match_output(output, fr"{namespace}.+?Active")
-        if match is None:
-            raise ResourceNotFoundError(f"namespace: {namespace} status is not Active")
-    except subprocess.CalledProcessError as err:
-        raise ResourceNotFoundError(f"namespace: {namespace} could not be found!") from err
-
-
-def _find_default_cluster():
-    cmd = ["kubectl", "cluster-info"]
-    output = run_shell_command(cmd)
-    match = match_output(output, r"Kubernetes .*?is running")
-    if match is None:
-        raise ResourceNotFoundError("No accessible Kubernetes cluster found")
-    return True
-
-
-def check_pods_status_by_namespace(namespace, error_message, pod_name):
-    get_pods_cmd = ["kubectl", "get", "pods"]
-    cmd = get_pods_cmd + ["--namespace", namespace]
-    try:
-        output = run_shell_command(cmd)
-        match = match_output(output, fr"No resources found in {namespace} namespace")
-        if match:
-            raise ResourceNotFoundError(error_message)
-        match = match_output(output, fr"{pod_name}-.+?Running")
-        if match is None:
-            raise ResourceNotFoundError(f"No pods running in {namespace} namespace")
-    except subprocess.CalledProcessError as err:
-        cmd = get_pods_cmd + ["-A", namespace]
-        try:
-            output = run_shell_command(cmd)
-            logger.debug(output)
-        except subprocess.CalledProcessError as err:
-            logger.error(err)
-        logger.error(err)
-        raise
+        kubectl_helpers.check_kubectl_namespace(component["namespace"])
+        kubectl_helpers.check_pods_status_by_namespace(component["namespace"], component["err_msg"], component["pod"])
 
 
 def exit_if_no_management_cluster():
@@ -948,8 +704,3 @@ def exit_if_no_management_cluster():
     except (ResourceNotFoundError, subprocess.CalledProcessError) as err:
         msg = 'No management cluster found. Please create one with "az capi management create".'
         raise UnclassifiedUserFault(msg) from err
-
-
-def match_output(output, regexp=None):
-    if regexp is not None:
-        return re.search(regexp, output)
