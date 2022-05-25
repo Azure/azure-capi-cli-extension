@@ -78,7 +78,12 @@ parameters:
     short-summary: Name of the Virtual Network to create
   - name: --windows -w
     type: bool
-    short-summary: Include a Windows node pool
+    short-summary: Enable options for Windows
+    long-summary: |
+        For built-in templates:
+          Include a Windows node pool.
+        For custom templates (--template):
+          Deploy Windows CNI.
 """
 
 helps['capi delete'] = """
