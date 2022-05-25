@@ -11,7 +11,7 @@ import stat
 
 from azure.cli.core.azclierror import FileOperationError
 from azure.cli.core.azclierror import InvalidArgumentValueError
-from azure.cli.core.azclierror import ValidationError
+from azure.cli.core.azclierror import ValidationError, UnclassifiedUserFault
 from knack.prompting import prompt_y_n
 from six.moves.urllib.request import urlopen  # pylint: disable=import-error
 
@@ -43,11 +43,19 @@ def check_clusterctl(cmd, install=False):
 
 
 def check_kind(cmd, install=False):
+    check_prereq_docker()
     check_binary(cmd, "kind", install_kind, install)
 
 
 def check_kubectl(cmd, install=False):
     check_binary(cmd, "kubectl", install_kubectl, install)
+
+
+def check_prereq_docker():
+    if which("docker"):
+        return True
+    error_msg = "Docker is required to use kind. To install see: https://docs.docker.com/get-docker/"
+    raise UnclassifiedUserFault(error_msg)
 
 
 def check_binary(cmd, binary_name, install_binary_method, install=False):
