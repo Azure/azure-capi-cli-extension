@@ -354,9 +354,9 @@ def render_custom_cluster_template(template, filename, args=None):
 
 def get_default_bootstrap_commands(windows=False):
     '''
-    Returns dictonary with base pre/post bootstrap vm commands
+    Returns a dictionary with default pre- and post-bootstrap VM commands
     '''
-    pre_bootstrap_cmds = [] if windows else []
+    pre_bootstrap_cmds = []
     post_bootstrap_cmds = ["nssm set kubelet start SERVICE_AUTO_START",
                            "powershell C:/defender-exclude-calico.ps1"] if windows else []
     bootstrap_cmds = {
@@ -367,13 +367,12 @@ def get_default_bootstrap_commands(windows=False):
 
 
 def parse_bootstrap_commands_from_file(file_path):
-    pre_commands = []
-    post_commands = []
+    pre_commands, post_commands = [], []
     if not os.path.isfile(file_path):
         raise InvalidArgumentValueError("Invalid boostrap command file")
     file_result = None
     with open(file_path, "r", encoding="utf-8") as file:
-        file_result = yaml.load(file, Loader=yaml.SafeLoader)
+        file_result = yaml.safe_load(file)
     for key, value in file_result.items():
         if not value:
             continue
@@ -386,6 +385,33 @@ def parse_bootstrap_commands_from_file(file_path):
         "post": post_commands
     }
     return result
+
+
+def check_resource_group(cmd, resource_group_name, default_resource_group_name, location=None):
+    """
+    Check if the RG already exists and that it's consistent with the location
+    specified. CAPZ will actually create (and delete) the RG if needed.
+    """
+    from ._client_factory import cf_resource_groups  # pylint: disable=import-outside-toplevel
+
+    rg_client = cf_resource_groups(cmd.cli_ctx)
+    if not resource_group_name:
+        resource_group_name = default_resource_group_name
+    try:
+        rg = rg_client.get(resource_group_name)
+        if not location:
+            location = rg.location
+        elif location != rg.location:
+            msg = "--location is {}, but the resource group {} already exists in {}."
+            raise InvalidArgumentValueError(msg.format(location, resource_group_name, rg.location))
+    except (CloudError, ResourceNotFoundException) as err:
+        if 'could not be found' not in err.message:
+            raise
+        if not location:
+            msg = "--location is required to create the resource group {}."
+            raise RequiredArgumentMissingError(msg.format(resource_group_name)) from err
+        logger.warning("Could not find an Azure resource group, CAPZ will create one for you")
+    return resource_group_name
 
 
 # pylint: disable=inconsistent-return-statements
@@ -434,32 +460,13 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
             raise MutuallyExclusiveArgumentError(error_msg)
 
     bootstrap_cmds = get_default_bootstrap_commands(windows)
+
     if bootstrap_commands:
         kubeadm_file_commands = parse_bootstrap_commands_from_file(bootstrap_commands)
         bootstrap_cmds["pre"] += kubeadm_file_commands["pre"]
         bootstrap_cmds["post"] += kubeadm_file_commands["post"]
 
-    # Check if the RG already exists and that it's consistent with the location
-    # specified. CAPZ will actually create (and delete) the RG if needed.
-    from ._client_factory import cf_resource_groups  # pylint: disable=import-outside-toplevel
-
-    rg_client = cf_resource_groups(cmd.cli_ctx)
-    if not resource_group_name:
-        resource_group_name = capi_name
-    try:
-        rg = rg_client.get(resource_group_name)
-        if not location:
-            location = rg.location
-        elif location != rg.location:
-            msg = "--location is {}, but the resource group {} already exists in {}."
-            raise InvalidArgumentValueError(msg.format(location, resource_group_name, rg.location))
-    except (CloudError, ResourceNotFoundException) as err:
-        if 'could not be found' not in err.message:
-            raise
-        if not location:
-            msg = "--location is required to create the resource group {}."
-            raise RequiredArgumentMissingError(msg.format(resource_group_name)) from err
-        logger.warning("Could not find an Azure resource group, CAPZ will create one for you")
+    resource_group_name = check_resource_group(cmd, resource_group_name, capi_name, location)
 
     msg = f'Create the Kubernetes cluster "{capi_name}" in the Azure resource group "{resource_group_name}"?'
     if not yes and not prompt_y_n(msg, default="n"):
