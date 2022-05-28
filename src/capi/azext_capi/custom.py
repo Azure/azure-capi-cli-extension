@@ -272,7 +272,7 @@ def update_management_cluster(cmd, yes=False):
         "--management-group",
         "capi-system/cluster-api",
         "--contract",
-        "v1alpha3",
+        "v1beta1",
     ]
     try:
         run_shell_command(command)

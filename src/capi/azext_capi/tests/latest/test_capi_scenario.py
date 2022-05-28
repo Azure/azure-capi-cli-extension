@@ -52,9 +52,9 @@ class CapiScenarioTest(ScenarioTest):
             mock.return_value = AZ_CAPI_LIST_JSON
             self.cmd('capi list --output json', checks=[
                 self.check('items[0].kind', 'Cluster'),
-                self.check('items[0].metadata.name', 'testcluster1'),
+                self.check('items[0].metadata.name', 'default-4377'),
                 self.check('items[1].kind', 'Cluster'),
-                self.check('items[1].metadata.name', 'testcluster2'),
+                self.check('items[1].metadata.name', 'testcluster1'),
             ])
 
             count = len(self.cmd("capi list --output json").get_output_in_json())
@@ -131,12 +131,13 @@ AZ_CAPI_LIST_JSON = """\
   "apiVersion": "v1",
   "items": [
     {
-      "apiVersion": "cluster.x-k8s.io/v1alpha3",
+      "apiVersion": "cluster.x-k8s.io/v1beta1",
       "kind": "Cluster",
       "metadata": {
         "annotations": {
+          "kubectl.kubernetes.io/last-applied-configuration": ""
         },
-        "creationTimestamp": "2021-03-31T19:18:10Z",
+        "creationTimestamp": "2022-05-27T20:53:08Z",
         "finalizers": [
           "cluster.cluster.x-k8s.io"
         ],
@@ -144,97 +145,10 @@ AZ_CAPI_LIST_JSON = """\
         "labels": {
           "cni": "calico"
         },
-        "managedFields": [
-          {
-            "apiVersion": "cluster.x-k8s.io/v1alpha3",
-            "fieldsType": "FieldsV1",
-            "fieldsV1": {
-              "f:metadata": {
-                "f:annotations": {
-                  ".": {},
-                  "f:kubectl.kubernetes.io/last-applied-configuration": {}
-                },
-                "f:labels": {
-                  ".": {},
-                  "f:cni": {}
-                }
-              },
-              "f:spec": {
-                ".": {},
-                "f:clusterNetwork": {
-                  ".": {},
-                  "f:pods": {
-                    ".": {},
-                    "f:cidrBlocks": {}
-                  }
-                },
-                "f:controlPlaneRef": {
-                  ".": {},
-                  "f:apiVersion": {},
-                  "f:kind": {},
-                  "f:name": {}
-                },
-                "f:infrastructureRef": {
-                  ".": {},
-                  "f:apiVersion": {},
-                  "f:kind": {},
-                  "f:name": {}
-                }
-              }
-            },
-            "manager": "kubectl-client-side-apply",
-            "operation": "Update",
-            "time": "2021-03-31T19:18:10Z"
-          },
-          {
-            "apiVersion": "cluster.x-k8s.io/v1alpha3",
-            "fieldsType": "FieldsV1",
-            "fieldsV1": {
-              "f:metadata": {
-                "f:finalizers": {
-                  ".": {},
-                  "v:cluster.cluster.x-k8s.io": {}
-                }
-              },
-              "f:spec": {
-                "f:controlPlaneEndpoint": {
-                  "f:host": {},
-                  "f:port": {}
-                }
-              },
-              "f:status": {
-                ".": {},
-                "f:conditions": {},
-                "f:controlPlaneInitialized": {},
-                "f:failureDomains": {
-                  ".": {},
-                  "f:1": {
-                    ".": {},
-                    "f:controlPlane": {}
-                  },
-                  "f:2": {
-                    ".": {},
-                    "f:controlPlane": {}
-                  },
-                  "f:3": {
-                    ".": {},
-                    "f:controlPlane": {}
-                  }
-                },
-                "f:infrastructureReady": {},
-                "f:observedGeneration": {},
-                "f:phase": {}
-              }
-            },
-            "manager": "manager",
-            "operation": "Update",
-            "time": "2021-03-31T19:20:58Z"
-          }
-        ],
-        "name": "testcluster1",
+        "name": "default-4377",
         "namespace": "default",
-        "resourceVersion": "2566",
-        "uid": "ab39bad4-569a-4e5d-874b-775525b71785"
+        "resourceVersion": "40534",
+        "uid": "11b0a41f-e10b-4919-917f-62d9fd58a14d"
       },
       "spec": {
         "clusterNetwork": {
@@ -245,41 +159,46 @@ AZ_CAPI_LIST_JSON = """\
           }
         },
         "controlPlaneEndpoint": {
-          "host": "testcluster1-b4de9daa.southcentralus.cloudapp.azure.com",
+          "host": "default-4377-c4b964c2.eastus.cloudapp.azure.com",
           "port": 6443
         },
         "controlPlaneRef": {
-          "apiVersion": "controlplane.cluster.x-k8s.io/v1alpha3",
+          "apiVersion": "controlplane.cluster.x-k8s.io/v1beta1",
           "kind": "KubeadmControlPlane",
-          "name": "testcluster1-control-plane",
+          "name": "default-4377-control-plane",
           "namespace": "default"
         },
         "infrastructureRef": {
-          "apiVersion": "infrastructure.cluster.x-k8s.io/v1alpha3",
+          "apiVersion": "infrastructure.cluster.x-k8s.io/v1beta1",
           "kind": "AzureCluster",
-          "name": "testcluster1",
+          "name": "default-4377",
           "namespace": "default"
         }
       },
       "status": {
         "conditions": [
           {
-            "lastTransitionTime": "2021-03-31T19:21:53Z",
+            "lastTransitionTime": "2022-05-27T20:57:55Z",
             "status": "True",
             "type": "Ready"
           },
           {
-            "lastTransitionTime": "2021-03-31T19:21:53Z",
+            "lastTransitionTime": "2022-05-27T20:57:29Z",
+            "status": "True",
+            "type": "ControlPlaneInitialized"
+          },
+          {
+            "lastTransitionTime": "2022-05-27T20:57:55Z",
             "status": "True",
             "type": "ControlPlaneReady"
           },
           {
-            "lastTransitionTime": "2021-03-31T19:18:53Z",
+            "lastTransitionTime": "2022-05-27T20:55:29Z",
             "status": "True",
             "type": "InfrastructureReady"
           }
         ],
-        "controlPlaneInitialized": true,
+        "controlPlaneReady": true,
         "failureDomains": {
           "1": {
             "controlPlane": true
@@ -297,87 +216,24 @@ AZ_CAPI_LIST_JSON = """\
       }
     },
     {
-      "apiVersion": "cluster.x-k8s.io/v1alpha3",
+      "apiVersion": "cluster.x-k8s.io/v1beta1",
       "kind": "Cluster",
       "metadata": {
         "annotations": {
+          "kubectl.kubernetes.io/last-applied-configuration": ""
         },
-        "creationTimestamp": "2021-03-31T19:52:29Z",
+        "creationTimestamp": "2022-05-27T20:58:06Z",
         "finalizers": [
           "cluster.cluster.x-k8s.io"
         ],
-        "generation": 1,
+        "generation": 2,
         "labels": {
           "cni": "calico"
         },
-        "managedFields": [
-          {
-            "apiVersion": "cluster.x-k8s.io/v1alpha3",
-            "fieldsType": "FieldsV1",
-            "fieldsV1": {
-              "f:metadata": {
-                "f:annotations": {
-                  ".": {},
-                  "f:kubectl.kubernetes.io/last-applied-configuration": {}
-                },
-                "f:labels": {
-                  ".": {},
-                  "f:cni": {}
-                }
-              },
-              "f:spec": {
-                ".": {},
-                "f:clusterNetwork": {
-                  ".": {},
-                  "f:pods": {
-                    ".": {},
-                    "f:cidrBlocks": {}
-                  }
-                },
-                "f:controlPlaneRef": {
-                  ".": {},
-                  "f:apiVersion": {},
-                  "f:kind": {},
-                  "f:name": {}
-                },
-                "f:infrastructureRef": {
-                  ".": {},
-                  "f:apiVersion": {},
-                  "f:kind": {},
-                  "f:name": {}
-                }
-              }
-            },
-            "manager": "kubectl-client-side-apply",
-            "operation": "Update",
-            "time": "2021-03-31T19:52:29Z"
-          },
-          {
-            "apiVersion": "cluster.x-k8s.io/v1alpha3",
-            "fieldsType": "FieldsV1",
-            "fieldsV1": {
-              "f:metadata": {
-                "f:finalizers": {
-                  ".": {},
-                  "v:cluster.cluster.x-k8s.io": {}
-                }
-              },
-              "f:status": {
-                ".": {},
-                "f:conditions": {},
-                "f:observedGeneration": {},
-                "f:phase": {}
-              }
-            },
-            "manager": "manager",
-            "operation": "Update",
-            "time": "2021-03-31T19:52:29Z"
-          }
-        ],
-        "name": "testcluster2",
+        "name": "testcluster1",
         "namespace": "default",
-        "resourceVersion": "10362",
-        "uid": "22444cab-c63b-4593-a2db-00ff2bbfe605"
+        "resourceVersion": "41760",
+        "uid": "d5db70c7-2804-4eb9-b2fc-d65fe7b258a1"
       },
       "spec": {
         "clusterNetwork": {
@@ -388,48 +244,66 @@ AZ_CAPI_LIST_JSON = """\
           }
         },
         "controlPlaneEndpoint": {
-          "host": "",
-          "port": 0
+          "host": "testcluster1-4ea828b6.westus3.cloudapp.azure.com",
+          "port": 6443
         },
         "controlPlaneRef": {
-          "apiVersion": "controlplane.cluster.x-k8s.io/v1alpha3",
+          "apiVersion": "controlplane.cluster.x-k8s.io/v1beta1",
           "kind": "KubeadmControlPlane",
-          "name": "testcluster2-control-plane",
+          "name": "testcluster1-control-plane",
           "namespace": "default"
         },
         "infrastructureRef": {
-          "apiVersion": "infrastructure.cluster.x-k8s.io/v1alpha3",
+          "apiVersion": "infrastructure.cluster.x-k8s.io/v1beta1",
           "kind": "AzureCluster",
-          "name": "testcluster2",
+          "name": "testcluster1",
           "namespace": "default"
         }
       },
       "status": {
         "conditions": [
           {
-            "lastTransitionTime": "2021-03-31T19:52:29Z",
-            "reason": "WaitingForControlPlane",
-            "severity": "Info",
+            "lastTransitionTime": "2022-05-27T21:01:47Z",
+            "message": "Scaling up control plane to 3 replicas (actual 2)",
+            "reason": "ScalingUp",
+            "severity": "Warning",
             "status": "False",
             "type": "Ready"
           },
           {
-            "lastTransitionTime": "2021-03-31T19:52:29Z",
-            "reason": "WaitingForControlPlane",
-            "severity": "Info",
+            "lastTransitionTime": "2022-05-27T21:01:39Z",
+            "status": "True",
+            "type": "ControlPlaneInitialized"
+          },
+          {
+            "lastTransitionTime": "2022-05-27T21:01:47Z",
+            "message": "Scaling up control plane to 3 replicas (actual 2)",
+            "reason": "ScalingUp",
+            "severity": "Warning",
             "status": "False",
             "type": "ControlPlaneReady"
           },
           {
-            "lastTransitionTime": "2021-03-31T19:52:29Z",
-            "reason": "WaitingForInfrastructure",
-            "severity": "Info",
-            "status": "False",
+            "lastTransitionTime": "2022-05-27T20:59:37Z",
+            "status": "True",
             "type": "InfrastructureReady"
           }
         ],
-        "observedGeneration": 1,
-        "phase": "Provisioning"
+        "controlPlaneReady": true,
+        "failureDomains": {
+          "1": {
+            "controlPlane": true
+          },
+          "2": {
+            "controlPlane": true
+          },
+          "3": {
+            "controlPlane": true
+          }
+        },
+        "infrastructureReady": true,
+        "observedGeneration": 2,
+        "phase": "Provisioned"
       }
     }
   ],
@@ -443,88 +317,24 @@ AZ_CAPI_LIST_JSON = """\
 
 AZ_CAPI_SHOW_JSON = """\
 {
-  "apiVersion": "cluster.x-k8s.io/v1alpha3",
+  "apiVersion": "cluster.x-k8s.io/v1beta1",
   "kind": "Cluster",
   "metadata": {
     "annotations": {
-      "kubectl.kubernetes.io/last-applied-configuration": "{\\"apiVersion\\":\\"cluster.x-k8s.io/v1alpha3\\",\\"kind\\":\\"Cluster\\",\\"metadata\\":{\\"annotations\\":{},\\"labels\\":{\\"cni\\":\\"calico\\"},\\"name\\":\\"testcluster1\\",\\"namespace\\":\\"default\\"},\\"spec\\":{\\"clusterNetwork\\":{\\"pods\\":{\\"cidrBlocks\\":[\\"192.168.0.0/16\\"]}},\\"controlPlaneRef\\":{\\"apiVersion\\":\\"controlplane.cluster.x-k8s.io/v1alpha3\\",\\"kind\\":\\"KubeadmControlPlane\\",\\"name\\":\\"testcluster1-control-plane\\"},\\"infrastructureRef\\":{\\"apiVersion\\":\\"infrastructure.cluster.x-k8s.io/v1alpha3\\",\\"kind\\":\\"AzureCluster\\",\\"name\\":\\"testcluster1\\"}}}\\n"
+      "kubectl.kubernetes.io/last-applied-configuration": ""
     },
-    "creationTimestamp": "2021-04-05T15:34:38Z",
+    "creationTimestamp": "2022-05-27T20:58:06Z",
     "finalizers": [
       "cluster.cluster.x-k8s.io"
     ],
-    "generation": 1,
+    "generation": 2,
     "labels": {
       "cni": "calico"
     },
-    "managedFields": [
-      {
-        "apiVersion": "cluster.x-k8s.io/v1alpha3",
-        "fieldsType": "FieldsV1",
-        "fieldsV1": {
-          "f:metadata": {
-            "f:annotations": {
-              ".": {},
-              "f:kubectl.kubernetes.io/last-applied-configuration": {}
-            },
-            "f:labels": {
-              ".": {},
-              "f:cni": {}
-            }
-          },
-          "f:spec": {
-            ".": {},
-            "f:clusterNetwork": {
-              ".": {},
-              "f:pods": {
-                ".": {},
-                "f:cidrBlocks": {}
-              }
-            },
-            "f:controlPlaneRef": {
-              ".": {},
-              "f:apiVersion": {},
-              "f:kind": {},
-              "f:name": {}
-            },
-            "f:infrastructureRef": {
-              ".": {},
-              "f:apiVersion": {},
-              "f:kind": {},
-              "f:name": {}
-            }
-          }
-        },
-        "manager": "kubectl-client-side-apply",
-        "operation": "Update",
-        "time": "2021-04-05T15:34:38Z"
-      },
-      {
-        "apiVersion": "cluster.x-k8s.io/v1alpha3",
-        "fieldsType": "FieldsV1",
-        "fieldsV1": {
-          "f:metadata": {
-            "f:finalizers": {
-              ".": {},
-              "v:\\"cluster.cluster.x-k8s.io\\"": {}
-            }
-          },
-          "f:status": {
-            ".": {},
-            "f:conditions": {},
-            "f:observedGeneration": {},
-            "f:phase": {}
-          }
-        },
-        "manager": "manager",
-        "operation": "Update",
-        "time": "2021-04-05T15:34:38Z"
-      }
-    ],
     "name": "testcluster1",
     "namespace": "default",
-    "resourceVersion": "310437",
-    "uid": "c6cac420-e480-4b05-95fe-e46e0e0926db"
+    "resourceVersion": "41760",
+    "uid": "d5db70c7-2804-4eb9-b2fc-d65fe7b258a1"
   },
   "spec": {
     "clusterNetwork": {
@@ -535,17 +345,17 @@ AZ_CAPI_SHOW_JSON = """\
       }
     },
     "controlPlaneEndpoint": {
-      "host": "",
-      "port": 0
+      "host": "testcluster1-4ea828b6.westus3.cloudapp.azure.com",
+      "port": 6443
     },
     "controlPlaneRef": {
-      "apiVersion": "controlplane.cluster.x-k8s.io/v1alpha3",
+      "apiVersion": "controlplane.cluster.x-k8s.io/v1beta1",
       "kind": "KubeadmControlPlane",
       "name": "testcluster1-control-plane",
       "namespace": "default"
     },
     "infrastructureRef": {
-      "apiVersion": "infrastructure.cluster.x-k8s.io/v1alpha3",
+      "apiVersion": "infrastructure.cluster.x-k8s.io/v1beta1",
       "kind": "AzureCluster",
       "name": "testcluster1",
       "namespace": "default"
@@ -554,29 +364,47 @@ AZ_CAPI_SHOW_JSON = """\
   "status": {
     "conditions": [
       {
-        "lastTransitionTime": "2021-04-05T15:34:40Z",
-        "reason": "WaitingForControlPlane",
-        "severity": "Info",
+        "lastTransitionTime": "2022-05-27T21:01:47Z",
+        "message": "Scaling up control plane to 3 replicas (actual 2)",
+        "reason": "ScalingUp",
+        "severity": "Warning",
         "status": "False",
         "type": "Ready"
       },
       {
-        "lastTransitionTime": "2021-04-05T15:34:40Z",
-        "reason": "WaitingForControlPlane",
-        "severity": "Info",
+        "lastTransitionTime": "2022-05-27T21:01:39Z",
+        "status": "True",
+        "type": "ControlPlaneInitialized"
+      },
+      {
+        "lastTransitionTime": "2022-05-27T21:01:47Z",
+        "message": "Scaling up control plane to 3 replicas (actual 2)",
+        "reason": "ScalingUp",
+        "severity": "Warning",
         "status": "False",
         "type": "ControlPlaneReady"
       },
       {
-        "lastTransitionTime": "2021-04-05T15:34:38Z",
-        "reason": "WaitingForInfrastructure",
-        "severity": "Info",
-        "status": "False",
+        "lastTransitionTime": "2022-05-27T20:59:37Z",
+        "status": "True",
         "type": "InfrastructureReady"
       }
     ],
-    "observedGeneration": 1,
-    "phase": "Provisioning"
+    "controlPlaneReady": true,
+    "failureDomains": {
+      "1": {
+        "controlPlane": true
+      },
+      "2": {
+        "controlPlane": true
+      },
+      "3": {
+        "controlPlane": true
+      }
+    },
+    "infrastructureReady": true,
+    "observedGeneration": 2,
+    "phase": "Provisioned"
   }
 }
 """
