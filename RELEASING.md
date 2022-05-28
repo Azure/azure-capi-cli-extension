@@ -6,7 +6,8 @@
 
     ```shell
     git checkout main
-    git pull
+    git fetch upstream
+    git rebase upstream/main
     ```
 
 2. **Choose the next semantic version.**
