@@ -484,3 +484,38 @@ class ParseKubeadmCommandsFromFileTest(unittest.TestCase):
         self.yaml_load_mock.return_value = fake_output
         result = parse_bootstrap_commands_from_file("fake-path")
         self.assertEqual(result, expected_output)
+
+
+class IsClusterctlCompatible(unittest.TestCase):
+
+    Compatible = [
+        "https://github.com/kubernetes-sigs/cluster-api-provider-azure/blob/main/templates/addons/windows/calico/kube-proxy-windows.yaml",
+        "https://github.com/kubernetes-sigs/cluster-api-provider-azure/blob/main/templates/cluster-template.yaml"
+    ]
+
+    NotCompatible = [
+        "https://github.com/kubernetes-sigs/cluster-api-provider-azure/releases/download/v1.3.1/cluster-template-aad.yaml",
+        "https://storage.googleapis.com/kubernetes-jenkins/pr-logs/pull/kubernetes-sigs_cluster-api-provider-azure/2345/pull-cluster-api-provider-azure-e2e/1532067150565478400/artifacts/clusters/bootstrap/capz-e2e-8nykgw-public-custom-vnet-cluster-template.yaml",
+        "https://test.com/someurl.yaml",
+        "https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/main/templates/addons/windows/calico/kube-proxy-windows.yaml",
+        "https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/main/templates/cluster-template-aad.yaml"
+    ]
+
+    def setUp(self):
+        self.os_path_isfile_patch = patch('os.path.isfile')
+        self.os_path_isfile_mock = self.os_path_isfile_patch.start()
+        self.os_path_isfile_mock.return_value = False
+        self.addCleanup(self.os_path_isfile_patch.stop)
+
+    def test_valid_matches(self):
+        for out in self.Compatible:
+            self.assertTrue(generic.is_clusterctl_compatible(out))
+
+    def test_invalid_matches(self):
+        for out in self.NotCompatible:
+            self.assertFalse(generic.is_clusterctl_compatible(out))
+
+    def test_localfile_is_compatible(self):
+        self.os_path_isfile_mock.return_value = True
+        self.assertTrue(generic.is_clusterctl_compatible("testfile.yaml"))
+        self.assertTrue(generic.is_clusterctl_compatible("./testfile.yaml"))
