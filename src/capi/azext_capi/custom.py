@@ -156,7 +156,7 @@ def create_aks_management_cluster(cmd, cluster_name, resource_group_name=None, l
     if not create_resource_group(cmd, resource_group_name, location, yes):
         return False
     command = ["az", "aks", "create", "-g", resource_group_name, "--name", cluster_name, "--generate-ssh-keys",
-               "--network-plugin", "azure", "--network-policy", "calico"]
+               "--network-plugin", "azure", "--network-policy", "calico", "--node-count", "1"]
     try_command_with_spinner(cmd, command, "Creating Azure management cluster with AKS",
                              "✓ Created AKS management cluster", "Couldn't create AKS management cluster")
     os.environ[MANAGEMENT_RG_NAME] = resource_group_name
