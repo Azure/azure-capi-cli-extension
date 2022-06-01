@@ -160,8 +160,10 @@ def create_aks_management_cluster(cmd, cluster_name, resource_group_name=None, l
     try_command_with_spinner(cmd, command, "Creating Azure management cluster with AKS",
                              "✓ Created AKS management cluster", "Couldn't create AKS management cluster")
     os.environ[MANAGEMENT_RG_NAME] = resource_group_name
+    logger.warning("aks credentials will overwrite existing cluster config for cluster %s if it exists", cluster_name)
     with Spinner(cmd, "Obtaining AKS credentials", "✓ Obtained AKS credentials"):
-        command = ["az", "aks", "get-credentials", "-g", resource_group_name, "--name", cluster_name]
+        command = ["az", "aks", "get-credentials", "-g", resource_group_name, "--name", cluster_name,
+                   "--overwrite-existing"]
         try:
             subprocess.check_call(command, universal_newlines=True)
         except subprocess.CalledProcessError as err:
