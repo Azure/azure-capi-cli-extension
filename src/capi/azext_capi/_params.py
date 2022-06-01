@@ -37,6 +37,7 @@ def load_arguments(self, _):
         ctx.argument('vnet_name', options_list=['--vnet-name'])
         ctx.argument('windows', options_list=['--windows', '-w'])
         ctx.argument('yes', options_list=['--yes', '-y'], help="Do not prompt for confirmation")
+        ctx.argument('user_provided_template', options_list=['--template'])
         ctx.argument('management_cluster_resource_group_name',
                      options_list=['--management-cluster-resource-group-name', '-mg'],
                      help="Resource group name of management cluster")

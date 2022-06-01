@@ -6,7 +6,7 @@
 """
 This module contains helper functions for the az capi extension.
 """
-
+from urllib.parse import urlparse
 import platform
 import ssl
 import sys
@@ -33,3 +33,8 @@ def urlretrieve(url, filename):
     req = urlopen(url, context=ssl_context())  # pylint: disable=consider-using-with
     with open(filename, "wb") as out:
         out.write(req.read())
+
+
+def get_url_domain_name(url):
+    domain = urlparse(url).netloc
+    return domain if domain else None

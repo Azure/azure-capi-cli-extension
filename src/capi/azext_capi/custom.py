@@ -12,6 +12,7 @@ import json
 import os
 import subprocess
 import time
+import re
 
 import azext_capi.helpers.kubectl as kubectl_helpers
 
@@ -22,6 +23,7 @@ from azure.cli.core.azclierror import RequiredArgumentMissingError
 from azure.core.exceptions import ResourceNotFoundError as ResourceNotFoundException
 from azure.cli.core.azclierror import ResourceNotFoundError
 from azure.cli.core.azclierror import UnclassifiedUserFault
+from azure.cli.core.azclierror import MutuallyExclusiveArgumentError
 from jinja2 import Environment, PackageLoader, StrictUndefined
 from jinja2.exceptions import UndefinedError
 from knack.prompting import prompt_choice_list, prompt_y_n
@@ -35,6 +37,8 @@ from .helpers.run_command import run_shell_command, try_command_with_spinner
 from .helpers.binary import check_clusterctl, check_kubectl, check_kind
 from .helpers.prompt import get_cluster_name_by_user_prompt, get_user_prompt_or_default
 from .helpers.generic import match_output
+from .helpers.os import set_environment_variables, write_to_file
+from .helpers.network import urlretrieve
 from .helpers.constants import MANAGEMENT_RG_NAME
 
 
@@ -290,6 +294,61 @@ def set_azure_identity_secret_env_vars():
     os.environ[cluster_identity_name] = os.environ.get(cluster_identity_name, "cluster-identity")
 
 
+def generate_workload_cluster_configuration(cmd, filename, args, user_provided_template=None):
+    end_msg = f'✓ Generated workload cluster configuration at "{filename}"'
+    with Spinner(cmd, "Generating workload cluster configuration", end_msg):
+        manifest = None
+        try:
+            if user_provided_template:
+                manifest = render_custom_cluster_template(user_provided_template, filename, args)
+            else:
+                manifest = render_builtin_jinja_template(args)
+            write_to_file(filename, manifest)
+        except subprocess.CalledProcessError as err:
+            msg = "Could not generate workload cluster configuration."
+            raise UnclassifiedUserFault(msg) from err
+
+
+def render_builtin_jinja_template(args):
+    """
+    Use the built-in template and process it with Jinja
+    """
+    env = Environment(loader=PackageLoader("azext_capi", "templates"),
+                      auto_reload=False, undefined=StrictUndefined)
+    logger.debug("Available templates: %s", env.list_templates())
+    jinja_template = env.get_template("base.jinja")
+    try:
+        return jinja_template.render(args)
+    except UndefinedError as err:
+        msg = f"Could not generate workload cluster configuration.\n{err}"
+        raise RequiredArgumentMissingError(msg) from err
+
+
+def render_custom_cluster_template(template, filename, args=None):
+    """
+    Fetch a user-defined template and process it with "clusterctl generate"
+    """
+    set_environment_variables(args)
+    command = ["clusterctl", "generate", "yaml", "--from"]
+    if not os.path.isfile(template):
+        reg = r"github.com\/[^\/]+?\/[^\/]+?\/blob\/[^\/]+\/[^\/]+?$"
+        if not match_output(template, reg):
+            file_name = f"raw-{filename}"
+            urlretrieve(template, file_name)
+            template = file_name
+    command += [template]
+    try:
+        return run_shell_command(command)
+    except subprocess.CalledProcessError as err:
+        err_command_list = err.args[1]
+        err_command_name = err_command_list[0]
+        if err_command_name == "clusterctl":
+            error_variables = re.search(r"(?<=\[).+?(?=\])", err.stdout)[0]
+            msg = "Could not generate workload cluster configuration."
+            msg += f"\nPlease set the following environment variables:\n{error_variables}"
+        raise RequiredArgumentMissingError(msg) from err
+
+
 # pylint: disable=inconsistent-return-statements
 def create_workload_cluster(  # pylint: disable=unused-argument,too-many-arguments,too-many-locals,too-many-statements
         cmd,
@@ -310,8 +369,29 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         ephemeral_disks=False,
         windows=False,
         pivot=False,
-        output_path=None,
+        user_provided_template=None,
         yes=False):
+
+    if user_provided_template:
+        mutual_exclusive_args = [
+            {
+                "name": "external_cloud_provider",
+                "value": external_cloud_provider
+            },
+            {
+                "name": "machinepool",
+                "value": machinepool
+            },
+            {
+                "name": "ephemeral_disks",
+                "value": ephemeral_disks
+            }
+        ]
+        defined_args = [v["name"] for v in mutual_exclusive_args if v["value"]]
+        if defined_args:
+            defined_args = " ,".join(defined_args)
+            error_msg = f'The following arguments are incompatible with "--template":\n{defined_args}'
+            raise MutuallyExclusiveArgumentError(error_msg)
 
     # Check if the RG already exists and that it's consistent with the location
     # specified. CAPZ will actually create (and delete) the RG if needed.
@@ -347,13 +427,11 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         return
 
     # Generate the cluster configuration
-    env = Environment(loader=PackageLoader("azext_capi", "templates"), auto_reload=False, undefined=StrictUndefined)
-    logger.debug("Available templates: %s", env.list_templates())
-    template = env.get_template("base.jinja")
     ssh_public_key_b64 = ""
     if ssh_public_key:
         ssh_public_key_b64 = base64.b64encode(ssh_public_key.encode("utf-8"))
         ssh_public_key_b64 = str(ssh_public_key_b64, "utf-8")
+
     args = {
         "AZURE_CONTROL_PLANE_MACHINE_TYPE": control_plane_machine_type,
         "AZURE_LOCATION": location,
@@ -364,10 +442,7 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         "AZURE_VNET_NAME": vnet_name,
         "CLUSTER_NAME": capi_name,
         "CONTROL_PLANE_MACHINE_COUNT": control_plane_machine_count,
-        "EXTERNAL_CLOUD_PROVIDER": external_cloud_provider,
         "KUBERNETES_VERSION": kubernetes_version,
-        "EPHEMERAL": ephemeral_disks,
-        "WINDOWS": windows,
         "WORKER_MACHINE_COUNT": node_machine_count,
         "NODEPOOL_TYPE": "machinepool" if machinepool else "machinedeployment",
         "CLUSTER_IDENTITY_NAME": os.environ["CLUSTER_IDENTITY_NAME"],
@@ -378,15 +453,16 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         "AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE": os.environ["AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE"],
     }
 
+    if not user_provided_template:
+        jinja_extra_args = {
+            "EXTERNAL_CLOUD_PROVIDER": external_cloud_provider,
+            "WINDOWS": windows,
+            "EPHEMERAL": ephemeral_disks,
+        }
+        args.update(jinja_extra_args)
+
     filename = capi_name + ".yaml"
-    end_msg = f'✓ Generated workload cluster configuration at "{filename}"'
-    with Spinner(cmd, "Generating workload cluster configuration", end_msg):
-        try:
-            manifest = template.render(args)
-            with open(filename, "w", encoding="utf-8") as manifest_file:
-                manifest_file.write(manifest)
-        except UndefinedError as err:
-            raise RequiredArgumentMissingError(f"Could not generate workload cluster configuration. {err}") from err
+    generate_workload_cluster_configuration(cmd, filename, args, user_provided_template)
 
     # Apply the cluster configuration.
     attempts, delay = 100, 3

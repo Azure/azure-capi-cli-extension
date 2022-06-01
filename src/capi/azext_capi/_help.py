@@ -35,6 +35,9 @@ parameters:
   - name: --external-cloud-provider
     type: bool
     short-summary: Use the external (AKA "out-of-tree") Azure cloud-provider
+  - name: --template
+    type: string
+    long-summary: User-defined template to create a workload cluster. Accepts a URL or file.
   - name: --kubernetes-version -k
     type: string
     short-summary: Version of Kubernetes to use
@@ -75,7 +78,12 @@ parameters:
     short-summary: Name of the Virtual Network to create
   - name: --windows -w
     type: bool
-    short-summary: Include a Windows node pool
+    short-summary: Enable options for Windows
+    long-summary: |
+        For built-in templates:
+          Include a Windows node pool.
+        For custom templates (--template):
+          Deploy Windows CNI.
 """
 
 helps['capi delete'] = """
