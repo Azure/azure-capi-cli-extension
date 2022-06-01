@@ -60,7 +60,10 @@ class CapiScenarioTest(ScenarioTest):
             count = len(self.cmd("capi list --output json").get_output_in_json())
             self.assertEqual(count, 4)  # "apiVersion", "items", "kind", and "metadata".
 
-            self.assertEqual(mock.call_count, 2)
+            tsv = self.cmd("capi list --output tsv").output
+            self.assertEqual(tsv, '2022-05-27T20:53:08Z\tdefault-4377\tdefault\tProvisioned\n2022-05-27T20:58:06Z\ttestcluster1\tdefault\tProvisioned\n')
+
+            self.assertEqual(mock.call_count, 3)
 
     @patch('azext_capi.custom.exit_if_no_management_cluster')
     def test_capi_show(self, mock_def):
@@ -78,7 +81,10 @@ class CapiScenarioTest(ScenarioTest):
             count = len(self.cmd("capi show --name testcluster1 --output json").get_output_in_json())
             self.assertEqual(count, 5)  # "apiVersion", "kind", "metadata", "spec", and "status"
 
-            self.assertEqual(mock.call_count, 2)
+            tsv = self.cmd("capi show --name testcluster1 --output tsv").output
+            self.assertEqual(tsv, '2022-05-27T20:58:06Z\ttestcluster1\tdefault\tProvisioned\n')
+
+            self.assertEqual(mock.call_count, 3)
 
     @patch('azext_capi.custom.is_self_managed_cluster', return_value=False)
     @patch('azext_capi.custom.exit_if_no_management_cluster')

@@ -27,6 +27,7 @@ from jinja2.exceptions import UndefinedError
 from knack.prompting import prompt_choice_list, prompt_y_n
 from msrestazure.azure_exceptions import CloudError
 
+from ._format import output_for_tsv, output_list_for_tsv
 from .helpers.generic import has_kind_prefix
 from .helpers.logger import logger
 from .helpers.spinner import Spinner
@@ -574,7 +575,15 @@ def list_workload_clusters(cmd):  # pylint: disable=unused-argument
         output = run_shell_command(command)
     except subprocess.CalledProcessError as err:
         raise UnclassifiedUserFault("Couldn't list workload clusters") from err
+    if tab_separated_output(cmd):
+        return output_list_for_tsv(output)
     return json.loads(output)
+
+
+def tab_separated_output(cmd):
+    """Returns True if "--output tsv" was specified without a "--query" argument."""
+    data = cmd.cli_ctx.invocation.data
+    return "query" not in data and data.get("output") == "tsv"
 
 
 def show_workload_cluster(cmd, capi_name):  # pylint: disable=unused-argument
@@ -585,6 +594,8 @@ def show_workload_cluster(cmd, capi_name):  # pylint: disable=unused-argument
         output = run_shell_command(command)
     except subprocess.CalledProcessError as err:
         raise UnclassifiedUserFault(f"Couldn't get the workload cluster {capi_name}") from err
+    if tab_separated_output(cmd):
+        return output_for_tsv(output)
     return json.loads(output)
 
 
