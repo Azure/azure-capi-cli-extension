@@ -14,11 +14,17 @@ spec:
         sshAuthorizedKeys:
         - {{AZURE_SSH_PUBLIC_KEY}}
         {%- endif %}
-      preKubeadmCommands: []
-      postKubeadmCommands:
-        - nssm set kubelet start SERVICE_AUTO_START
-        - powershell C:/defender-exclude-calico.ps1
       {%- endif %}
+      {% if PRE_BOOTSTRAP_CMDS %}preKubeadmCommands:
+      {% for command in PRE_BOOTSTRAP_CMDS -%}
+      - {{command}}
+      {% endfor -%}
+      {%- endif -%}
+      {% if POST_BOOTSTRAP_CMDS %}postKubeadmCommands:
+      {% for command in POST_BOOTSTRAP_CMDS -%}
+      - {{command}}
+      {% endfor -%}
+      {%- endif -%}
       joinConfiguration:
         nodeRegistration:
           name: {% raw %}'{{ ds.meta_data["local_hostname"] }}'{% endraw %}

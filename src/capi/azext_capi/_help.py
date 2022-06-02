@@ -32,6 +32,29 @@ parameters:
   - name: --ephemeral-disks -e
     type: string
     short-summary: Use ephemeral disks
+  - name: --bootstrap-commands
+    type: string
+    short-summary: YAML file with user-defined VM bootstrap commands
+    long-summary: |
+
+        The file should contain commands in this YAML format:
+          ---
+          preBootstrapCommands:
+            - touch /tmp/pre-bootstrap-command-was-here
+          postBootstrapCommands:
+            - touch /tmp/post-bootstrap-command-was-here
+
+        Alternative YAML format for a single pre and post command:
+          ---
+          postBootstrapCommands: touch /tmp/pre-bootstrap-command-was-here
+          preBootstrapCommands: touch /tmp/post-bootstrap-command-was-here
+
+        These commands are implemented via Cluster API bootstrap provider kubeadm.
+        This provider is responsible for generating a cloud-init script to turn a
+        Machine into a Kubernetes Node. The commands run before and after
+        kubeadm init/join on each VM. To learn more, visit:
+
+        https://cluster-api.sigs.k8s.io/tasks/kubeadm-bootstrap.html?#additional-features
   - name: --external-cloud-provider
     type: bool
     short-summary: Use the external (AKA "out-of-tree") Azure cloud-provider

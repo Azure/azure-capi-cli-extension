@@ -12,11 +12,13 @@ from collections import namedtuple
 from unittest.mock import patch, Mock
 
 from azure.cli.core.azclierror import UnclassifiedUserFault
+from azure.cli.core.azclierror import InvalidArgumentValueError
 from azure.cli.core.azclierror import ResourceNotFoundError
 
 import azext_capi.helpers.network as network
 import azext_capi.helpers.generic as generic
-from azext_capi.custom import create_resource_group, create_new_management_cluster, get_user_prompt_or_default, management_cluster_components_missing_matching_expressions
+from azext_capi.custom import create_resource_group, create_new_management_cluster, management_cluster_components_missing_matching_expressions, get_default_bootstrap_commands, parse_bootstrap_commands_from_file
+from azext_capi.helpers.prompt import get_user_prompt_or_default
 from azext_capi.helpers.kubectl import check_kubectl_namespace, find_attribute_in_context, find_kubectl_current_context, find_default_cluster, add_kubeconfig_to_command
 from azext_capi.helpers.run_command import try_command_with_spinner, run_shell_command
 
@@ -406,3 +408,79 @@ class GetUrlDomainName(unittest.TestCase):
         fake_url = "invalid-url"
         result = network.get_url_domain_name(fake_url)
         self.assertIsNone(result)
+
+
+class GetDefaultBootstrapCommandsTest(unittest.TestCase):
+
+    def test_get_default_kubeadm_for_windows(self):
+        result = get_default_bootstrap_commands(windows=True)
+        self.assertIsNotNone(result)
+        self.assertEquals(len(result["pre"]), 0)
+        self.assertNotEquals(len(result["post"]), 0)
+
+    def test_get_default_kubeadm_no_windows(self):
+        result = get_default_bootstrap_commands()
+        self.assertIsNotNone(result)
+        self.assertEqual(result["pre"], [])
+        self.assertEqual(result["post"], [])
+
+
+class ParseKubeadmCommandsFromFileTest(unittest.TestCase):
+
+    def setUp(self):
+        self.os_path_isfile_patch = patch('os.path.isfile')
+        self.os_path_isfile_mock = self.os_path_isfile_patch.start()
+        self.addCleanup(self.os_path_isfile_patch.stop)
+        self.fake_valid_output = {
+            "pre": ["fake-pre-cmd"],
+            "post": ["fake-post-cmd"]
+        }
+
+        self.yaml_load_patch = patch('yaml.load')
+        self.yaml_load_mock = self.yaml_load_patch.start()
+        self.addCleanup(self.yaml_load_patch.stop)
+
+        self.open_patch = patch('azext_capi.custom.open')
+        self.open_mock = self.open_patch.start()
+        self.addCleanup(self.open_patch.stop)
+
+    def test_get_bootstrap_commands_no_valid_file_path(self):
+        self.os_path_isfile_mock.return_value = False
+        with self.assertRaises(InvalidArgumentValueError):
+            parse_bootstrap_commands_from_file("fake-path")
+
+    def test_get_bootstrap_commands_valid_file_both_commands(self):
+        self.os_path_isfile_mock.return_value = True
+        fake_file_value = {
+            "preBootstrapCommands": ["fake-pre-cmd"],
+            "postBootstrapCommands": ["fake-post-cmd"]
+        }
+        self.yaml_load_mock.return_value = fake_file_value
+        result = parse_bootstrap_commands_from_file("fake-path")
+        self.assertEqual(result, self.fake_valid_output)
+
+    def test_get_bootstrap_commands_valid_file_pre_commands(self):
+        self.os_path_isfile_mock.return_value = True
+        fake_output = {
+            "preBootstrapCommands": ["fake-pre-cmd"]
+        }
+        expected_output = {
+            "pre": ["fake-pre-cmd"],
+            "post": []
+        }
+        self.yaml_load_mock.return_value = fake_output
+        result = parse_bootstrap_commands_from_file("fake-path")
+        self.assertEqual(result, expected_output)
+
+    def test_get_bootstrap_commands_valid_file_post_commands(self):
+        self.os_path_isfile_mock.return_value = True
+        fake_output = {
+            "preBootstrapCommands": ["fake-post-cmd"]
+        }
+        expected_output = {
+            "pre": ["fake-post-cmd"],
+            "post": []
+        }
+        self.yaml_load_mock.return_value = fake_output
+        result = parse_bootstrap_commands_from_file("fake-path")
+        self.assertEqual(result, expected_output)
