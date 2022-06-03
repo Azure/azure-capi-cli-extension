@@ -6,7 +6,8 @@ Release History
 0.0.5
 ++++++
 
-* TBD!
+* Added support for user-defined templates and for pre- and post-bootstrap commands
+* Several fixes for Windows compatibility
 
 0.0.4
 ++++++
