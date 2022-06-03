@@ -37,7 +37,7 @@ from .helpers.spinner import Spinner
 from .helpers.run_command import run_shell_command, try_command_with_spinner
 from .helpers.binary import check_clusterctl, check_kubectl, check_kind
 from .helpers.prompt import get_cluster_name_by_user_prompt, get_user_prompt_or_default
-from .helpers.generic import match_output
+from .helpers.generic import match_output, is_clusterctl_compatible
 from .helpers.os import set_environment_variables, write_to_file
 from .helpers.network import urlretrieve
 from .helpers.constants import MANAGEMENT_RG_NAME
@@ -333,12 +333,11 @@ def render_custom_cluster_template(template, filename, args=None):
     """
     set_environment_variables(args)
     command = ["clusterctl", "generate", "yaml", "--from"]
-    if not os.path.isfile(template):
-        reg = r"github.com\/[^\/]+?\/[^\/]+?\/blob\/[^\/]+\/[^\/]+?$"
-        if not match_output(template, reg):
-            file_name = f"raw-{filename}"
-            urlretrieve(template, file_name)
-            template = file_name
+    if not is_clusterctl_compatible(template):
+        # download file so clusterctl can use a local file
+        file_name = f"raw-{filename}"
+        urlretrieve(template, file_name)
+        template = file_name
     command += [template]
     try:
         return run_shell_command(command)
@@ -424,7 +423,7 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         control_plane_machine_count=os.environ.get("AZURE_CONTROL_PLANE_MACHINE_COUNT", 3),
         node_machine_type=os.environ.get("AZURE_NODE_MACHINE_TYPE", "Standard_D2s_v3"),
         node_machine_count=os.environ.get("AZURE_NODE_MACHINE_COUNT", 3),
-        kubernetes_version=os.environ.get("AZURE_KUBERNETES_VERSION", "1.22.8"),
+        kubernetes_version=os.environ.get("AZURE_KUBERNETES_VERSION", "v1.22.8"),
         ssh_public_key=os.environ.get("AZURE_SSH_PUBLIC_KEY", ""),
         external_cloud_provider=False,
         management_cluster_name=None,
@@ -563,16 +562,27 @@ clusterctl get kubeconfig {capi_name}
     spinner_exit_message = "✓ Deployed CNI to workload cluster"
     error_message = "Couldn't install CNI after waiting 5 minutes."
 
-    apply_calico_manifest(cmd, calico_manifest, workload_cfg, spinner_enter_message,
-                          spinner_exit_message, error_message)
+    apply_kubernetes_manifest(cmd, calico_manifest, workload_cfg, spinner_enter_message,
+                              spinner_exit_message, error_message)
 
     if windows:
         calico_manifest = "https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/main/templates/addons/windows/calico/calico.yaml"  # pylint: disable=line-too-long
         spinner_enter_message = "Deploying Windows Calico support"
         spinner_exit_message = "✓ Deployed Windows Calico support to worload cluster"
         error_message = "Couldn't install Windows Calico support after waiting 5 minutes."
-        apply_calico_manifest(cmd, calico_manifest, workload_cfg, spinner_enter_message,
-                              spinner_exit_message, error_message)
+        apply_kubernetes_manifest(cmd, calico_manifest, workload_cfg, spinner_enter_message,
+                                  spinner_exit_message, error_message)
+
+        kubeproxy_manifest_url = "https://github.com/kubernetes-sigs/cluster-api-provider-azure/blob/main/templates/addons/windows/calico/kube-proxy-windows.yaml"  # pylint: disable=line-too-long
+        kubeproxy_manifest_file = "kube-proxy-windows.yaml"
+        manifest = render_custom_cluster_template(kubeproxy_manifest_url, kubeproxy_manifest_file, args)
+        write_to_file(kubeproxy_manifest_file, manifest)
+
+        spinner_enter_message = "Deploying Windows kube-proxy support"
+        spinner_exit_message = "✓ Deployed Windows kube-proxy support to worload cluster"
+        error_message = "Couldn't install Windows kube-proxy support after waiting 5 minutes."
+        apply_kubernetes_manifest(cmd, kubeproxy_manifest_file, workload_cfg, spinner_enter_message,
+                                  spinner_exit_message, error_message)
 
     # Wait for all nodes to be ready before returning
     with Spinner(cmd, "Waiting for workload cluster nodes to be ready", "✓ Workload cluster is ready"):
@@ -651,11 +661,11 @@ def delete_aks_cluster(cmd, name, resource_group):
     return True
 
 
-def apply_calico_manifest(cmd, calico_manifest, workload_cfg,
-                          spinner_enter_message, spinner_exit_message, error_message):
+def apply_kubernetes_manifest(cmd, manifest, workload_cfg,
+                              spinner_enter_message, spinner_exit_message, error_message):
     attempts, delay = 100, 3
     with Spinner(cmd, spinner_enter_message, spinner_exit_message):
-        command = ["kubectl", "apply", "-f", calico_manifest, "--kubeconfig", workload_cfg]
+        command = ["kubectl", "apply", "-f", manifest, "--kubeconfig", workload_cfg]
         for _ in range(attempts):
             try:
                 run_shell_command(command)
