@@ -17,8 +17,9 @@ from azure.cli.core.azclierror import ResourceNotFoundError
 from azure.cli.core.azclierror import InvalidArgumentValueError
 
 from .run_command import run_shell_command
-from .logger import logger
+from .os import write_to_file
 from .generic import match_output
+from .logger import logger
 from .constants import KUBECONFIG
 
 
@@ -129,12 +130,11 @@ def get_kubeconfig(capi_name):
     """Writes kubeconfig of specified cluster"""
     cmd = ["clusterctl", "get", "kubeconfig", capi_name]
     try:
-        output = run_shell_command(cmd)
+        output = run_shell_command(cmd, combine_std=False)
     except subprocess.CalledProcessError as err:
         raise UnclassifiedUserFault("Couldn't get kubeconfig") from err
     filename = capi_name + ".kubeconfig"
-    with open(filename, "w", encoding="utf-8") as kubeconfig_file:
-        kubeconfig_file.write(output)
+    write_to_file(filename, output)
     return f"Wrote kubeconfig file to {filename} "
 
 

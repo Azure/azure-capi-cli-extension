@@ -13,9 +13,11 @@ from .spinner import Spinner
 from .logger import logger, is_verbose
 
 
-def run_shell_command(command):
+def run_shell_command(command, combine_std=True):
     # if --verbose, don't capture stderr
-    stderr = None if is_verbose() else subprocess.STDOUT
+    stderr = None
+    if combine_std:
+        stderr = None if is_verbose() else subprocess.STDOUT
     output = subprocess.check_output(command, universal_newlines=True, stderr=stderr)
     logger.info("%s returned:\n%s", " ".join(command), output)
     return output
