@@ -407,8 +407,10 @@ def check_resource_group(cmd, resource_group_name, default_resource_group_name, 
         if 'could not be found' not in err.message:
             raise
         if not location:
-            msg = "--location is required to create the resource group {}."
-            raise RequiredArgumentMissingError(msg.format(resource_group_name)) from err
+            location = os.environ.get("AZURE_LOCATION", None)
+            if not location:
+                msg = "--location is required to create the resource group {}."
+                raise RequiredArgumentMissingError(msg.format(resource_group_name)) from err
         logger.warning("Could not find an Azure resource group, CAPZ will create one for you")
     return resource_group_name
 

@@ -32,6 +32,7 @@ class CapiScenarioTest(ScenarioTest):
         with patch('azext_capi._client_factory.cf_resource_groups') as cf_resource_groups:
             with self.assertRaises(InvalidArgumentValueError):
                 self.cmd('capi create -n myCluster -g existingRG --location bogusLocation')
+
         mock_client = MagicMock()
         mock_client.get.side_effect = CloudError(Mock(response_status=404), "Resource group 'myCluster' could not be found.")
         # New RG, but no --location specified
@@ -39,6 +40,12 @@ class CapiScenarioTest(ScenarioTest):
             cf_resource_groups.return_value = mock_client
             with self.assertRaises(RequiredArgumentMissingError):
                 self.cmd('capi create -n myClusterName -g myCluster')
+        # New RG, no --location, AZURE_LOCATION set
+        with patch('azext_capi._client_factory.cf_resource_groups') as cf_resource_groups:
+            with patch.dict('os.environ', {"AZURE_LOCATION": "westus3"}):
+                cf_resource_groups.return_value = mock_client
+                with self.assertRaises(NoTTYException):
+                    self.cmd('capi create -n myClusterName -g myCluster')
         # New RG, --location specified but no --resource-group name
         with patch('azext_capi._client_factory.cf_resource_groups') as cf_resource_groups:
             cf_resource_groups.return_value = mock_client
