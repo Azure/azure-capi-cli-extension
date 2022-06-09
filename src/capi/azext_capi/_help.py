@@ -69,9 +69,9 @@ parameters:
   - name: --location -l
     type: string
     long-summary: |
-        If not specified, the location of the --resource-group will be used.
-        if --resource-group is not specified or does not yet exist, AZURE_LOCATION will be used.
-        Required if --resource-group or AZURE_LOCATION are not set.
+        If not specified, default configured location or AZURE_LOCATION will be used (in this order).
+        If --resource-group is specified and already exists, the location has to match.
+        Required if default location is not configured or AZURE_LOCATION is not set.
   - name: --machinepool -m
     type: bool
     short-summary: Use experimental MachinePools instead of MachineDeployments
