@@ -394,8 +394,6 @@ def check_resource_group(cmd, resource_group_name, default_resource_group_name, 
     from ._client_factory import cf_resource_groups  # pylint: disable=import-outside-toplevel
 
     rg_client = cf_resource_groups(cmd.cli_ctx)
-    if not location:
-        location = os.environ.get("AZURE_LOCATION", None)
     if not resource_group_name:
         resource_group_name = default_resource_group_name
     try:
@@ -438,6 +436,9 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         user_provided_template=None,
         bootstrap_commands=None,
         yes=False):
+
+    if location is None:
+        location = os.environ.get("AZURE_LOCATION", None)
 
     if user_provided_template:
         mutual_exclusive_args = [
