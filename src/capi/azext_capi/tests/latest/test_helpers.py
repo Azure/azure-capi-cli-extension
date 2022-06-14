@@ -20,6 +20,7 @@ import azext_capi.helpers.generic as generic
 from azext_capi.custom import create_resource_group, create_new_management_cluster, management_cluster_components_missing_matching_expressions, get_default_bootstrap_commands, parse_bootstrap_commands_from_file
 from azext_capi.helpers.prompt import get_user_prompt_or_default
 from azext_capi.helpers.kubectl import check_kubectl_namespace, find_attribute_in_context, find_kubectl_current_context, find_default_cluster, add_kubeconfig_to_command
+from azext_capi.helpers.names import generate_cluster_name
 from azext_capi.helpers.run_command import try_command_with_spinner, run_shell_command
 
 
@@ -519,3 +520,22 @@ class IsClusterctlCompatible(unittest.TestCase):
         self.os_path_isfile_mock.return_value = True
         self.assertTrue(generic.is_clusterctl_compatible("testfile.yaml"))
         self.assertTrue(generic.is_clusterctl_compatible("./testfile.yaml"))
+
+
+class TestGenerateClusterName(unittest.TestCase):
+
+    def test_generate_cluster_name(self):
+        cases = {
+            4990: "rococo-aqualung",
+            4991: "guided-vocalist",
+            4992: "hungry-inventor",
+            4993: "timely-renegade",
+            4994: "clever-earthman",
+            4995: "vulcan-instinct",
+            4996: "iconic-tabletop",
+            4997: "zircon-goldfish",
+            4998: "ultima-electron",
+            4999: "steely-footwear",
+        }
+        for seed, name in cases.items():
+            self.assertEqual(generate_cluster_name(seed), name)

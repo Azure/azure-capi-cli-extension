@@ -10,6 +10,7 @@ from azure.cli.testsdk.scenario_tests import AllowLargeResponse
 from azure.cli.core.azclierror import InvalidArgumentValueError
 from azure.cli.core.azclierror import RequiredArgumentMissingError
 from azure.cli.testsdk import (ScenarioTest, ResourceGroupPreparer)
+from azure.core.exceptions import ResourceNotFoundError as ResourceNotFoundException
 from knack.prompting import NoTTYException
 from msrestazure.azure_exceptions import CloudError
 
@@ -20,9 +21,13 @@ class CapiScenarioTest(ScenarioTest):
 
     @patch('azext_capi.custom.exit_if_no_management_cluster')
     def test_capi_create(self, mock_def):
+        mock_client = MagicMock()
+        mock_client.get.side_effect = ResourceNotFoundException("The resource group could not be found.")
         # Test that error is raised if no args are passed
-        with self.assertRaises(SystemExit):
-            self.cmd('capi create')
+        with patch('azext_capi._client_factory.cf_resource_groups') as cf_resource_groups:
+            cf_resource_groups.return_value = mock_client
+            with self.assertRaises(RequiredArgumentMissingError):
+                self.cmd('capi create')
         # Test that --name is the only required arg if it already exists
         with patch('azext_capi._client_factory.cf_resource_groups') as cf_resource_groups:
             # If we got to user confirmation (NoTTYException), RG validation succeeded
@@ -108,20 +113,20 @@ class CapiScenarioTest(ScenarioTest):
             self.assertTrue(mock.called)
             self.assertEqual(mock.call_args[0][0], ["kubectl", "delete", "cluster", "testcluster1"])
 
+    @patch('azext_capi.custom.delete_aks_cluster')
+    @patch('azext_capi.custom.delete_kind_cluster_from_current_context')
+    @patch('azext_capi.custom.has_kind_prefix')
+    @patch('azext_capi.custom.kubectl_helpers.find_cluster_in_current_context')
     @patch('azext_capi.custom.exit_if_no_management_cluster')
-    def test_capi_management_delete(self, mock_def):
+    def test_capi_management_delete(self, mock_def, find_cluster_mock, kind_pref_mock, delete_kind_mock, delete_aks_mock):
         # Test (indirectly) that user is prompted for confirmation by default
         with self.assertRaises(NoTTYException):
             self.cmd('capi management delete')
 
         # Test that --yes skips confirmation and the management cluster components are deleted
-        with patch('subprocess.check_output') as mock:
             self.cmd("capi management delete -y", checks=[
                 self.is_empty(),
             ])
-            self.assertEqual(mock.call_count, 2)
-            self.assertEqual(mock.call_args_list[0][0][0], ["clusterctl", "delete", "--all", "--include-crd", "--include-namespace"])
-            self.assertEqual(mock.call_args_list[1][0][0][:4], ["kubectl", "delete", "namespace", "--ignore-not-found"])
 
     @patch('azext_capi.custom.exit_if_no_management_cluster')
     def test_capi_management_update(self, mock_def):

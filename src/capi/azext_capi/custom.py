@@ -209,30 +209,44 @@ Where do you want to create a management cluster?
     return True
 
 
+def find_resource_group_name_of_aks_cluster(cluster_name):
+    jmespath_query = "[].{name:name, group:resourceGroup}"
+    command = ["az", "aks", "list", "--query", jmespath_query]
+    result = run_shell_command(command)
+    result = json.loads(result)
+    result = [item for item in result if item['name'] == cluster_name]
+    if result:
+        return result[0]["group"]
+    return None
+
+
 def delete_management_cluster(cmd, yes=False):  # pylint: disable=unused-argument
     exit_if_no_management_cluster()
-    msg = 'Do you want to delete Cluster API components from the current cluster?'
+    cluster_name = kubectl_helpers.find_cluster_in_current_context()
+
+    msg = f"Do you want to delete {cluster_name} cluster?"
+
+    cluster_resource_group = None
+    is_kind_cluster = has_kind_prefix(cluster_name)
+    if not is_kind_cluster:
+        cluster_resource_group = find_resource_group_name_of_aks_cluster(cluster_name)
+        if not cluster_resource_group:
+            prompt = f"Please enter resource group name of {cluster_name} AKS cluster: "
+            cluster_resource_group = get_user_prompt_or_default(prompt, cluster_name, skip_prompt=yes)
+            msg = f"Do you want to delete {cluster_name} cluster and resource group {cluster_resource_group}?"
+
+    pre_workload_warning = f"""\
+Please make sure to delete all workload clusters managed by {cluster_name} management cluster before proceeding \
+to prevent any orphan workload cluster
+"""
+    msg = pre_workload_warning + msg
     if not yes and not prompt_y_n(msg, default="n"):
         return
 
-    command = ["clusterctl", "delete", "--all",
-               "--include-crd", "--include-namespace"]
-    try:
-        run_shell_command(command)
-    except subprocess.CalledProcessError as err:
-        raise UnclassifiedUserFault("Couldn't delete components from management cluster") from err
-    namespaces = [
-        "capi-kubeadm-bootstrap-system",
-        "capi-kubeadm-control-plane-system",
-        "capi-system",
-        "capz-system",
-        "cert-manager",
-    ]
-    command = ["kubectl", "delete", "namespace", "--ignore-not-found"] + namespaces
-    try:
-        run_shell_command(command)
-    except subprocess.CalledProcessError as err:
-        raise UnclassifiedUserFault("Couldn't delete namespaces from management cluster") from err
+    if is_kind_cluster:
+        delete_kind_cluster_from_current_context(cmd)
+    else:
+        delete_aks_cluster(cmd, cluster_name, cluster_resource_group)
 
 
 def move_management_cluster(cmd):
@@ -414,9 +428,9 @@ def check_resource_group(cmd, resource_group_name, default_resource_group_name, 
 
 
 # pylint: disable=inconsistent-return-statements
-def create_workload_cluster(  # pylint: disable=unused-argument,too-many-arguments,too-many-locals,too-many-statements
+def create_workload_cluster(  # pylint: disable=too-many-arguments,too-many-locals,too-many-statements
         cmd,
-        capi_name,
+        capi_name=None,
         resource_group_name=None,
         location=None,
         control_plane_machine_type=os.environ.get("AZURE_CONTROL_PLANE_MACHINE_TYPE", "Standard_D2s_v3"),
@@ -439,6 +453,11 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
 
     if location is None:
         location = os.environ.get("AZURE_LOCATION", None)
+
+    if not capi_name:
+        from .helpers.names import generate_cluster_name
+        capi_name = generate_cluster_name()
+        logger.warning('Using generated cluster name "%s"', capi_name)
 
     if user_provided_template:
         mutual_exclusive_args = [
