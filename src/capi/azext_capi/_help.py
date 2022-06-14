@@ -81,6 +81,9 @@ parameters:
     type: integer
   - name: --node-machine-type
     type: string
+  - name: --name -n
+    type: string
+    long-summary: If not specified, a random name will be generated.
   - name: --output-path -p
     type: string
     short-summary: Where to save helper commands when they are downloaded
