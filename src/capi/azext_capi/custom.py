@@ -451,6 +451,9 @@ def create_workload_cluster(  # pylint: disable=too-many-arguments,too-many-loca
         bootstrap_commands=None,
         yes=False):
 
+    if location is None:
+        location = os.environ.get("AZURE_LOCATION", None)
+
     if not capi_name:
         from .helpers.names import generate_cluster_name
         capi_name = generate_cluster_name()
