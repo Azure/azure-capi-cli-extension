@@ -10,6 +10,7 @@ from azure.cli.testsdk.scenario_tests import AllowLargeResponse
 from azure.cli.core.azclierror import InvalidArgumentValueError
 from azure.cli.core.azclierror import RequiredArgumentMissingError
 from azure.cli.testsdk import (ScenarioTest, ResourceGroupPreparer)
+from azure.core.exceptions import ResourceNotFoundError as ResourceNotFoundException
 from knack.prompting import NoTTYException
 from msrestazure.azure_exceptions import CloudError
 
@@ -20,9 +21,13 @@ class CapiScenarioTest(ScenarioTest):
 
     @patch('azext_capi.custom.exit_if_no_management_cluster')
     def test_capi_create(self, mock_def):
+        mock_client = MagicMock()
+        mock_client.get.side_effect = ResourceNotFoundException("The resource group could not be found.")
         # Test that error is raised if no args are passed
-        with self.assertRaises(SystemExit):
-            self.cmd('capi create')
+        with patch('azext_capi._client_factory.cf_resource_groups') as cf_resource_groups:
+            cf_resource_groups.return_value = mock_client
+            with self.assertRaises(RequiredArgumentMissingError):
+                self.cmd('capi create')
         # Test that --name is the only required arg if it already exists
         with patch('azext_capi._client_factory.cf_resource_groups') as cf_resource_groups:
             # If we got to user confirmation (NoTTYException), RG validation succeeded

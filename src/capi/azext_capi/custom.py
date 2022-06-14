@@ -428,9 +428,9 @@ def check_resource_group(cmd, resource_group_name, default_resource_group_name, 
 
 
 # pylint: disable=inconsistent-return-statements
-def create_workload_cluster(  # pylint: disable=unused-argument,too-many-arguments,too-many-locals,too-many-statements
+def create_workload_cluster(  # pylint: disable=too-many-arguments,too-many-locals,too-many-statements
         cmd,
-        capi_name,
+        capi_name=None,
         resource_group_name=None,
         location=None,
         control_plane_machine_type=os.environ.get("AZURE_CONTROL_PLANE_MACHINE_TYPE", "Standard_D2s_v3"),
@@ -450,6 +450,11 @@ def create_workload_cluster(  # pylint: disable=unused-argument,too-many-argumen
         user_provided_template=None,
         bootstrap_commands=None,
         yes=False):
+
+    if not capi_name:
+        from .helpers.names import generate_cluster_name
+        capi_name = generate_cluster_name()
+        logger.warning('Using generated cluster name "%s"', capi_name)
 
     if user_provided_template:
         mutual_exclusive_args = [
