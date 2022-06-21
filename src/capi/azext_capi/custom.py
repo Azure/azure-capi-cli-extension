@@ -16,6 +16,7 @@ import re
 import yaml
 
 import azext_capi.helpers.kubectl as kubectl_helpers
+import semver
 
 from azure.cli.core import get_default_cli
 from azure.cli.core.api import get_config_dir
@@ -458,6 +459,13 @@ def create_workload_cluster(  # pylint: disable=too-many-arguments,too-many-loca
         from .helpers.names import generate_cluster_name
         capi_name = generate_cluster_name()
         logger.warning('Using generated cluster name "%s"', capi_name)
+
+    if not kubernetes_version.startswith('v'):
+        kubernetes_version = f'v{kubernetes_version}'
+    try:
+        semver.parse(kubernetes_version[1:])
+    except ValueError as err:
+        raise InvalidArgumentValueError(f'Invalid Kubernetes version: "{kubernetes_version}"') from err
 
     if user_provided_template:
         mutual_exclusive_args = [
