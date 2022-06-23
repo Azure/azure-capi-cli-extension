@@ -720,7 +720,8 @@ def delete_workload_cluster(cmd, capi_name, resource_group_name=None, yes=False)
     if not yes and not prompt_y_n(msg, default="n"):
         return
     begin_msg = "Deleting workload cluster"
-    end_msg = "✓ Deleted workload cluster"
+    end_msg = "✓ Deleted workload cluster" \
+              + f'\nNote: To also delete the management cluster, run "az capi management delete -n {capi_name}"'
     err_msg = "Couldn't delete workload cluster"
     try_command_with_spinner(cmd, command, begin_msg, end_msg, err_msg)
     if is_self_managed:
