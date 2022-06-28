@@ -41,6 +41,9 @@ def load_arguments(self, _):
         ctx.argument('management_cluster_resource_group_name',
                      options_list=['--management-cluster-resource-group-name', '-mg'],
                      help="Resource group name of management cluster")
+        ctx.argument('tags',
+                     options_list=['--tags', '-t'],
+                     help="Tags applied to the AKS management cluster and resource group if created in Azure")
 
     with self.argument_context('capi install') as ctx:
         ctx.argument('all_tools', capi_name_type, options_list=['--all', '-a'])
