@@ -45,7 +45,7 @@ from .helpers.constants import MANAGEMENT_RG_NAME
 
 
 def init_environment(cmd, prompt=True, management_cluster_name=None,
-                     resource_group_name=None, location=None):
+                     resource_group_name=None, location=None, tags=""):
     check_prereqs(cmd, install=True)
     # Create a management cluster if needed
     use_new_cluster = False
@@ -86,7 +86,7 @@ https://cluster-api.sigs.k8s.io/user/concepts.html
         use_new_cluster = True
     if use_new_cluster and not create_new_management_cluster(cmd, management_cluster_name,
                                                              resource_group_name, location,
-                                                             pre_prompt_text=pre_prompt, prompt=prompt):
+                                                             pre_prompt_text=pre_prompt, prompt=prompt, tags=tags):
         return False
 
     _create_azure_identity_secret(cmd)
@@ -118,10 +118,10 @@ def _install_capi_provider_components(cmd, kubeconfig=None):
     try_command_with_spinner(cmd, command, begin_msg, end_msg, error_msg)
 
 
-def create_resource_group(cmd, rg_name, location, yes=False):
+def create_resource_group(cmd, rg_name, location, yes=False, tags=""):
     msg = f'Create the Azure resource group "{rg_name}" in location "{location}"?'
     if yes or prompt_y_n(msg, default="n"):
-        command = ["az", "group", "create", "-l", location, "-n", rg_name]
+        command = ["az", "group", "create", "-l", location, "-n", rg_name, "--tags", tags]
         begin_msg = f"Creating Resource Group: {rg_name}"
         end_msg = f"✓ Created Resource Group: {rg_name}"
         err_msg = f"Could not create resource group {rg_name}"
@@ -151,7 +151,7 @@ def create_management_cluster(cmd, cluster_name=None, resource_group_name=None, 
     _install_capi_provider_components(cmd)
 
 
-def create_aks_management_cluster(cmd, cluster_name, resource_group_name=None, location=None, yes=False):
+def create_aks_management_cluster(cmd, cluster_name, resource_group_name=None, location=None, yes=False, tags=""):
     if not resource_group_name:
         msg = "Please name the resource group for the management cluster"
         resource_group_name = get_user_prompt_or_default(msg, cluster_name, skip_prompt=yes)
@@ -159,10 +159,10 @@ def create_aks_management_cluster(cmd, cluster_name, resource_group_name=None, l
         default_location = "southcentralus"
         msg = f"Please provide a location for {resource_group_name} resource group"
         location = get_user_prompt_or_default(msg, default_location, skip_prompt=yes)
-    if not create_resource_group(cmd, resource_group_name, location, yes):
+    if not create_resource_group(cmd, resource_group_name, location, yes, tags):
         return False
     command = ["az", "aks", "create", "-g", resource_group_name, "--name", cluster_name, "--generate-ssh-keys",
-               "--network-plugin", "azure", "--network-policy", "calico", "--node-count", "1"]
+               "--network-plugin", "azure", "--network-policy", "calico", "--node-count", "1", "--tags", tags]
     try_command_with_spinner(cmd, command, "Creating Azure management cluster with AKS",
                              "✓ Created AKS management cluster", "Couldn't create AKS management cluster")
     os.environ[MANAGEMENT_RG_NAME] = resource_group_name
@@ -178,7 +178,7 @@ def create_aks_management_cluster(cmd, cluster_name, resource_group_name=None, l
 
 
 def create_new_management_cluster(cmd, cluster_name=None, resource_group_name=None,
-                                  location=None, pre_prompt_text=None, prompt=True):
+                                  location=None, pre_prompt_text=None, prompt=True, tags=""):
     choices = ["azure - a management cluster in the Azure cloud",
                "local - a local Docker container-based management cluster",
                "exit - don't create a management cluster"]
@@ -197,7 +197,7 @@ Where do you want to create a management cluster?
         choice_index = 0
     if choice_index == 0:
         if not create_aks_management_cluster(cmd, cluster_name, resource_group_name,
-                                             location, yes=not prompt):
+                                             location, yes=not prompt, tags=tags):
             return False
     elif choice_index == 1:
         check_kind(cmd, install=not prompt)
@@ -450,7 +450,8 @@ def create_workload_cluster(  # pylint: disable=too-many-arguments,too-many-loca
         pivot=False,
         user_provided_template=None,
         bootstrap_commands=None,
-        yes=False):
+        yes=False,
+        tags=""):
 
     if location is None:
         location = os.environ.get("AZURE_LOCATION", None)
@@ -505,7 +506,7 @@ def create_workload_cluster(  # pylint: disable=too-many-arguments,too-many-loca
     set_azure_identity_secret_env_vars()
 
     if not init_environment(cmd, not yes, management_cluster_name, management_cluster_resource_group_name,
-                            location):
+                            location, tags):
         return
 
     # Generate the cluster configuration
