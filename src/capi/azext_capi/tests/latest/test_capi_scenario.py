@@ -98,9 +98,10 @@ class CapiScenarioTest(ScenarioTest):
 
             self.assertEqual(mock.call_count, 3)
 
+    @patch('azext_capi.custom.kubectl_helpers.find_cluster_in_current_context', return_value="testcluster1")
     @patch('azext_capi.custom.is_self_managed_cluster', return_value=False)
     @patch('azext_capi.custom.exit_if_no_management_cluster')
-    def test_capi_delete(self, mock_def, mock_is_self_managed):
+    def test_capi_delete(self, mock_def, mock_is_self_managed, find_cluster_mock):
         # Test (indirectly) that user is prompted for confirmation by default
         with self.assertRaises(NoTTYException):
             self.cmd('capi delete --name testcluster1')

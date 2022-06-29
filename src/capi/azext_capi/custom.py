@@ -61,7 +61,7 @@ def init_environment(cmd, prompt=True, management_cluster_name=None,
         error_msg = err.error_msg
         if management_cluster_components_missing_matching_expressions(error_msg):
             choices = ["Create a new management cluster",
-                       "Use default kuberenetes cluster found and install CAPI required components",
+                       "Use default kubernetes cluster found and install CAPI required components",
                        "Exit"]
             msg = "The default kubernetes cluster found is missing required components for a management cluster.\
                    \nDo you want to:"
@@ -305,10 +305,10 @@ def update_management_cluster(cmd, yes=False):
 
 def set_azure_identity_secret_env_vars():
     identity_secret_name = "AZURE_CLUSTER_IDENTITY_SECRET_NAME"
-    indentity_secret_namespace = "AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE"
+    identity_secret_namespace = "AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE"
     cluster_identity_name = "CLUSTER_IDENTITY_NAME"
     os.environ[identity_secret_name] = os.environ.get(identity_secret_name, "cluster-identity-secret")
-    os.environ[indentity_secret_namespace] = os.environ.get(indentity_secret_namespace, "default")
+    os.environ[identity_secret_namespace] = os.environ.get(identity_secret_namespace, "default")
     os.environ[cluster_identity_name] = os.environ.get(cluster_identity_name, "cluster-identity")
 
 
@@ -598,7 +598,7 @@ clusterctl get kubeconfig {capi_name}
     if windows:
         calico_manifest = "https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/main/templates/addons/windows/calico/calico.yaml"  # pylint: disable=line-too-long
         spinner_enter_message = "Deploying Windows Calico support"
-        spinner_exit_message = "✓ Deployed Windows Calico support to worload cluster"
+        spinner_exit_message = "✓ Deployed Windows Calico support to workload cluster"
         error_message = "Couldn't install Windows Calico support after waiting 5 minutes."
         apply_kubernetes_manifest(cmd, calico_manifest, workload_cfg, spinner_enter_message,
                                   spinner_exit_message, error_message)
@@ -609,7 +609,7 @@ clusterctl get kubeconfig {capi_name}
         write_to_file(kubeproxy_manifest_file, manifest)
 
         spinner_enter_message = "Deploying Windows kube-proxy support"
-        spinner_exit_message = "✓ Deployed Windows kube-proxy support to worload cluster"
+        spinner_exit_message = "✓ Deployed Windows kube-proxy support to workload cluster"
         error_message = "Couldn't install Windows kube-proxy support after waiting 5 minutes."
         apply_kubernetes_manifest(cmd, kubeproxy_manifest_file, workload_cfg, spinner_enter_message,
                                   spinner_exit_message, error_message)
@@ -721,6 +721,8 @@ def delete_workload_cluster(cmd, capi_name, resource_group_name=None, yes=False)
         return
     begin_msg = "Deleting workload cluster"
     end_msg = "✓ Deleted workload cluster"
+    if capi_name == kubectl_helpers.find_cluster_in_current_context():
+        end_msg += f'\nNote: To also delete the management cluster, run "az capi management delete -n {capi_name}"'
     err_msg = "Couldn't delete workload cluster"
     try_command_with_spinner(cmd, command, begin_msg, end_msg, err_msg)
     if is_self_managed:
@@ -792,10 +794,10 @@ def check_prereqs(cmd, install=False):
 
     # Check for required environment variables
     # TODO: remove this when AAD Pod Identity becomes the default
-    check_enviroment_variables()
+    check_environment_variables()
 
 
-def check_enviroment_variables():
+def check_environment_variables():
     required_env_vars = ["AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_SUBSCRIPTION_ID", "AZURE_TENANT_ID"]
     missing_env_vars = [v for v in required_env_vars if not check_environment_var(v)]
     missing_vars_len = len(missing_env_vars)
