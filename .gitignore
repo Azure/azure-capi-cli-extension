@@ -133,3 +133,6 @@ dmypy.json
 
 # Pycharm project configuration
 .idea
+
+# user env variables
+.user.env
