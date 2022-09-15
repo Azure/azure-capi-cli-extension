@@ -60,7 +60,10 @@ parameters:
     short-summary: Use the external (AKA "out-of-tree") Azure cloud-provider
   - name: --template
     type: string
-    long-summary: User-defined template to create a workload cluster. Accepts a URL or file.
+    long-summary: |
+        User-defined template to create a workload cluster. Accepts a URL or file.
+        You can use https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/main/templates/cluster-template.yaml
+        as a starting point for a custom template.
   - name: --kubernetes-version -k
     type: string
     short-summary: Version of Kubernetes to use
