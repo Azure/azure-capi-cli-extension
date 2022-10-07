@@ -5,6 +5,7 @@
 
 # pylint: disable=missing-docstring
 
+from gettext import install
 import os
 import platform
 import stat
@@ -38,17 +39,17 @@ def which(binary):
     return None
 
 
-def check_clusterctl(cmd, install=False):
-    check_binary(cmd, "clusterctl", install_clusterctl, install)
+def check_clusterctl(cmd, install=False, install_path=None):
+    check_binary(cmd, "clusterctl", install_clusterctl, install, install_path=install_path)
 
 
-def check_kind(cmd, install=False):
+def check_kind(cmd, install=False, install_path=None):
     check_prereq_docker()
-    check_binary(cmd, "kind", install_kind, install)
+    check_binary(cmd, "kind", install_kind, install, install_path=install_path)
 
 
-def check_kubectl(cmd, install=False):
-    check_binary(cmd, "kubectl", install_kubectl, install)
+def check_kubectl(cmd, install=False, install_path=None):
+    check_binary(cmd, "kubectl", install_kubectl, install, install_path=install_path)
 
 
 def check_prereq_docker():
@@ -58,12 +59,12 @@ def check_prereq_docker():
     raise UnclassifiedUserFault(error_msg)
 
 
-def check_binary(cmd, binary_name, install_binary_method, install=False):
+def check_binary(cmd, binary_name, install_binary_method, install=False, install_path=None):
     if not which(binary_name):
         logger.info("%s was not found.", binary_name)
         if install or prompt_y_n(f"Download and install {binary_name}?", default="n"):
             with Spinner(cmd, f"Downloading {binary_name}", f"✓ Downloaded {binary_name}"):
-                install_binary_method(cmd)
+                install_binary_method(cmd, install_location=install_path)
 
 
 def install_clusterctl(_cmd, client_version="latest", install_location=None, source_url=None):
@@ -87,7 +88,9 @@ def install_clusterctl(_cmd, client_version="latest", install_location=None, sou
         raise ValidationError(f'The clusterctl binary is not available for "{system}"')
 
     # ensure installation directory exists
-    if install_location is None:
+    if install_location:
+        install_location = f'{install_location}/clusterctl'
+    else:
         install_location = _get_default_install_location("clusterctl")
     install_dir, cli = os.path.dirname(install_location), os.path.basename(
         install_location
@@ -107,7 +110,9 @@ def install_kind(_cmd, client_version="v0.10.0", install_location=None, source_u
         source_url = "https://kind.sigs.k8s.io/dl/{}/kind-{}-amd64"
 
     # ensure installation directory exists
-    if install_location is None:
+    if install_location:
+        install_location = f'{install_location}/kind'
+    else:
         install_location = _get_default_install_location("kind")
     install_dir, cli = os.path.dirname(install_location), os.path.basename(
         install_location
@@ -151,7 +156,9 @@ def install_kubectl(cmd, client_version="latest", install_location=None, source_
     base_url = source_url + "/{}/bin/{}/amd64/{}"
 
     # ensure installation directory exists
-    if install_location is None:
+    if install_location:
+        install_location = f'{install_location}/kubectl'
+    else:
         install_location = _get_default_install_location("kubectl")
     install_dir, cli = os.path.dirname(install_location), os.path.basename(
         install_location

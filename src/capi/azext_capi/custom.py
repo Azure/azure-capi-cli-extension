@@ -777,17 +777,17 @@ def update_workload_cluster(cmd, capi_name):
     raise NotImplementedError
 
 
-def install_tools(cmd, all_tools=False):
+def install_tools(cmd, all_tools=False, install_path=None):
     if all_tools:
         logger.info('Checking if required tools are installed')
-        check_tools(cmd, True)
+        check_tools(cmd, install=True, install_path=install_path)
     else:
         logger.info('Installing individual tools is not currently supported')
 
 
-def check_tools(cmd, install=False):
-    check_kubectl(cmd, install)
-    check_clusterctl(cmd, install)
+def check_tools(cmd, install=False, install_path=None):
+    check_kubectl(cmd, install, install_path=install_path)
+    check_clusterctl(cmd, install, install_path=install_path)
 
 
 def check_prereqs(cmd, install=False):

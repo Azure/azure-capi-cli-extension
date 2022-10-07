@@ -47,6 +47,7 @@ def load_arguments(self, _):
 
     with self.argument_context('capi install') as ctx:
         ctx.argument('all_tools', capi_name_type, options_list=['--all', '-a'])
+        ctx.argument('install_path', options_list=['--install-path', '-ip'])
 
 
 def get_virtualenv():
