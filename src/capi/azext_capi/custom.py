@@ -786,8 +786,8 @@ def install_tools(cmd, all_tools=False, install_path=None):
 
 
 def check_tools(cmd, install=False, install_path=None):
-    check_kubectl(cmd, install, install_path=install_path)
-    check_clusterctl(cmd, install, install_path=install_path)
+    check_kubectl(cmd, install=install, install_path=install_path)
+    check_clusterctl(cmd, install=install, install_path=install_path)
 
 
 def check_prereqs(cmd, install=False):
