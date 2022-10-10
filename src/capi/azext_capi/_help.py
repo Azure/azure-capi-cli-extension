@@ -129,6 +129,8 @@ short-summary: Install all needed tools.
 parameters:
   - name: --all -a
     type: bool
+  - name: --install-path -ip
+    type: string
 """
 
 helps['capi show'] = """

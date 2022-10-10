@@ -60,7 +60,7 @@ def check_prereq_docker():
 
 
 def check_binary(cmd, binary_name, install_binary_method, install=False, install_path=None):
-    if not which(binary_name):
+    if not which(binary_name) or install_path is not None:
         logger.info("%s was not found.", binary_name)
         if install or prompt_y_n(f"Download and install {binary_name}?", default="n"):
             with Spinner(cmd, f"Downloading {binary_name}", f"✓ Downloaded {binary_name}"):
