@@ -88,7 +88,7 @@ def install_clusterctl(_cmd, client_version="latest", install_location=None, sou
         raise ValidationError(f'The clusterctl binary is not available for "{system}"')
 
     # ensure installation directory exists
-    if install_location:
+    if install_location is not None:
         install_location = f'{install_location}/clusterctl'
     else:
         install_location = _get_default_install_location("clusterctl")
@@ -110,7 +110,7 @@ def install_kind(_cmd, client_version="v0.10.0", install_location=None, source_u
         source_url = "https://kind.sigs.k8s.io/dl/{}/kind-{}-amd64"
 
     # ensure installation directory exists
-    if install_location:
+    if install_location is not None:
         install_location = f'{install_location}/kind'
     else:
         install_location = _get_default_install_location("kind")
@@ -156,7 +156,7 @@ def install_kubectl(cmd, client_version="latest", install_location=None, source_
     base_url = source_url + "/{}/bin/{}/amd64/{}"
 
     # ensure installation directory exists
-    if install_location:
+    if install_location is not None:
         install_location = f'{install_location}/kubectl'
     else:
         install_location = _get_default_install_location("kubectl")
