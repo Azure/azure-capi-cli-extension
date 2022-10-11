@@ -46,8 +46,8 @@ def load_arguments(self, _):
                      help="Tags applied to the AKS management cluster and resource group if created in Azure")
 
     with self.argument_context('capi install') as ctx:
-        ctx.argument('all_tools', capi_name_type, options_list=['--all', '-a'])
-        ctx.argument('install_path', 
+        ctx.argument('all_tools', options_list=['--all', '-a'], help="Install all tools")
+        ctx.argument('install_path',
                      options_list=['--install-path', '-ip'],
                      help="Path to install the required tools to")
 

@@ -782,7 +782,7 @@ def install_tools(cmd, all_tools=False, install_path=None):
         logger.info('Checking if required tools are installed')
         check_tools(cmd, install=True, install_path=install_path)
     else:
-        logger.info('Installing individual tools is not currently supported')
+        logger.warning('Installing individual tools is not currently supported')
 
 
 def check_tools(cmd, install=False, install_path=None):
