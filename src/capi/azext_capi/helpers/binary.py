@@ -5,7 +5,6 @@
 
 # pylint: disable=missing-docstring
 
-from gettext import install
 import os
 import platform
 import stat
@@ -40,16 +39,16 @@ def which(binary):
 
 
 def check_clusterctl(cmd, install=False, install_path=None):
-    check_binary(cmd, "clusterctl", install_clusterctl, install, install_path=install_path)
+    check_binary(cmd, "clusterctl", install_clusterctl, install=install, install_path=install_path)
 
 
 def check_kind(cmd, install=False, install_path=None):
     check_prereq_docker()
-    check_binary(cmd, "kind", install_kind, install, install_path=install_path)
+    check_binary(cmd, "kind", install_kind, install=install, install_path=install_path)
 
 
 def check_kubectl(cmd, install=False, install_path=None):
-    check_binary(cmd, "kubectl", install_kubectl, install, install_path=install_path)
+    check_binary(cmd, "kubectl", install_kubectl, install=install, install_path=install_path)
 
 
 def check_prereq_docker():
@@ -88,7 +87,7 @@ def install_clusterctl(_cmd, client_version="latest", install_location=None, sou
         raise ValidationError(f'The clusterctl binary is not available for "{system}"')
 
     # ensure installation directory exists
-    if install_location:
+    if install_location is not None:
         install_location = f'{install_location}/clusterctl'
     else:
         install_location = _get_default_install_location("clusterctl")
@@ -110,7 +109,7 @@ def install_kind(_cmd, client_version="v0.10.0", install_location=None, source_u
         source_url = "https://kind.sigs.k8s.io/dl/{}/kind-{}-amd64"
 
     # ensure installation directory exists
-    if install_location:
+    if install_location is not None:
         install_location = f'{install_location}/kind'
     else:
         install_location = _get_default_install_location("kind")
@@ -156,7 +155,7 @@ def install_kubectl(cmd, client_version="latest", install_location=None, source_
     base_url = source_url + "/{}/bin/{}/amd64/{}"
 
     # ensure installation directory exists
-    if install_location:
+    if install_location is not None:
         install_location = f'{install_location}/kubectl'
     else:
         install_location = _get_default_install_location("kubectl")
