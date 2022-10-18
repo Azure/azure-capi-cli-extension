@@ -159,8 +159,12 @@ def create_aks_management_cluster(cmd, cluster_name, resource_group_name=None, l
         default_location = "southcentralus"
         msg = f"Please provide a location for {resource_group_name} resource group"
         location = get_user_prompt_or_default(msg, default_location, skip_prompt=yes)
-    if not create_resource_group(cmd, resource_group_name, location, yes, tags):
-        return False
+    # Don't recreate the resource group if it already exists: this overwrites existing tags.
+    try:
+        check_resource_group(cmd, resource_group_name, cluster_name, location)
+    except (CloudError, ResourceNotFoundException):
+        if not create_resource_group(cmd, resource_group_name, location, yes, tags):
+            return False
     command = ["az", "aks", "create", "-g", resource_group_name, "--name", cluster_name, "--generate-ssh-keys",
                "--network-plugin", "azure", "--network-policy", "calico", "--node-count", "1", "--tags", tags]
     try_command_with_spinner(cmd, command, "Creating Azure management cluster with AKS",

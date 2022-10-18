@@ -114,6 +114,12 @@ class CapiScenarioTest(ScenarioTest):
             self.assertTrue(mock.called)
             self.assertEqual(mock.call_args[0][0], ["kubectl", "delete", "cluster", "testcluster1"])
 
+    @patch('azext_capi.custom.check_prereqs')
+    def test_capi_management_create(self, mock_def):
+        # Test (indirectly) that user is prompted for confirmation by default
+        with self.assertRaises(NoTTYException):
+            self.cmd('capi management create')
+
     @patch('azext_capi.custom.delete_aks_cluster')
     @patch('azext_capi.custom.delete_kind_cluster_from_current_context')
     @patch('azext_capi.custom.has_kind_prefix')
@@ -125,9 +131,9 @@ class CapiScenarioTest(ScenarioTest):
             self.cmd('capi management delete')
 
         # Test that --yes skips confirmation and the management cluster components are deleted
-            self.cmd("capi management delete -y", checks=[
-                self.is_empty(),
-            ])
+        self.cmd("capi management delete -y", checks=[
+            self.is_empty(),
+        ])
 
     @patch('azext_capi.custom.exit_if_no_management_cluster')
     def test_capi_management_update(self, mock_def):
