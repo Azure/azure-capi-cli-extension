@@ -3,6 +3,12 @@
 Release History
 ===============
 
+0.0.6
+++++++
+
+* Generate a random cluster name if not specified
+* Add nightly build job
+
 0.0.5
 ++++++
 
