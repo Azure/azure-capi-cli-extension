@@ -455,6 +455,7 @@ def create_workload_cluster(  # pylint: disable=too-many-arguments,too-many-loca
         user_provided_template=None,
         bootstrap_commands=None,
         yes=False,
+        wait_for_nodes=False,
         tags=""):
 
     if location is None:
@@ -622,6 +623,10 @@ clusterctl get kubeconfig {capi_name}
     # Wait for all nodes to be ready before returning
     with Spinner(cmd, "Waiting for workload cluster nodes to be ready", "✓ Workload cluster is ready"):
         kubectl_helpers.wait_for_nodes(workload_cfg)
+
+    if wait_for_nodes:
+        with Spinner(cmd, "Waiting for all workload cluster nodes to be ready", "✓ Workload cluster is ready"):
+            kubectl_helpers.wait_for_number_of_nodes(int(control_plane_machine_count) + int(node_machine_count), workload_cfg)
 
     if pivot:
         pivot_cluster(cmd, workload_cfg)
