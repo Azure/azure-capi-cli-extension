@@ -176,7 +176,7 @@ def wait_for_nodes(kubeconfig):
     wait_for_resource_ready(find_nodes, error_msg, kubeconfig)
 
 
-def wait_for_number_of_nodes(number_of_nodes, kubeconfig=None,):
+def wait_for_number_of_nodes(number_of_nodes, kubeconfig=None):
     """
     Waits for nodes of specified cluster to get be ready before proceeding.
     Timeout: 5 minutes
