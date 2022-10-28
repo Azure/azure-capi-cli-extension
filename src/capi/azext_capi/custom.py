@@ -625,8 +625,9 @@ clusterctl get kubeconfig {capi_name}
         kubectl_helpers.wait_for_nodes(workload_cfg)
 
     if wait_for_nodes:
+        total_machine_count = int(control_plane_machine_count) + int(node_machine_count)
         with Spinner(cmd, "Waiting for all workload cluster nodes to be ready", "✓ Workload cluster is ready"):
-            kubectl_helpers.wait_for_number_of_nodes(int(control_plane_machine_count) + int(node_machine_count), workload_cfg)
+            kubectl_helpers.wait_for_number_of_nodes(total_machine_count, workload_cfg)
 
     if pivot:
         pivot_cluster(cmd, workload_cfg)
