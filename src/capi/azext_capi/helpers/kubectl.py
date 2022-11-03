@@ -11,6 +11,7 @@ import subprocess
 import os
 import time
 import re
+import json
 
 from azure.cli.core.azclierror import UnclassifiedUserFault
 from azure.cli.core.azclierror import ResourceNotFoundError
@@ -173,6 +174,35 @@ def wait_for_nodes(kubeconfig):
     """
     error_msg = "Not all cluster nodes are Ready after 5 minutes."
     wait_for_resource_ready(find_nodes, error_msg, kubeconfig)
+
+
+def wait_for_number_of_nodes(number_of_nodes, kubeconfig=None):
+    """
+    Waits for nodes of specified cluster to get be ready before proceeding.
+    Timeout: 5 minutes
+    """
+    error_msg = "Not all cluster nodes are Ready after 10 minutes."
+    command = ["kubectl", "get", "nodes", "-o", "json"]
+    command += add_kubeconfig_to_command(kubeconfig)
+    timeout = 60 * 10
+    start = time.time()
+    while time.time() < start + timeout:
+        try:
+            kubectl_output = run_shell_command(command)
+            json_output = json.loads(kubectl_output)
+            ready_nodes = 0
+            for item in json_output["items"]:
+                for condition in item["status"]["conditions"]:
+                    if condition["type"] == "Ready" and condition["status"] == "True":
+                        ready_nodes += 1
+            if ready_nodes < number_of_nodes:
+                time.sleep(5)
+                continue
+            return
+        except subprocess.CalledProcessError as err:
+            logger.info(err)
+            time.sleep(5)
+    raise ResourceNotFoundError(error_msg)
 
 
 def wait_for_resource_ready(find_resources, error_msg, kubeconfig=None,):
