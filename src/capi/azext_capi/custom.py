@@ -160,9 +160,7 @@ def create_aks_management_cluster(cmd, cluster_name, resource_group_name=None, l
         msg = f"Please provide a location for {resource_group_name} resource group"
         location = get_user_prompt_or_default(msg, default_location, skip_prompt=yes)
     # Don't recreate the resource group if it already exists: this overwrites existing tags.
-    try:
-        check_resource_group(cmd, resource_group_name, cluster_name, location)
-    except (CloudError, ResourceNotFoundException):
+    if not check_resource_group(cmd, resource_group_name, cluster_name, location):
         if not create_resource_group(cmd, resource_group_name, location, yes, tags):
             return False
     command = ["az", "aks", "create", "-g", resource_group_name, "--name", cluster_name, "--generate-ssh-keys",
@@ -429,7 +427,8 @@ def check_resource_group(cmd, resource_group_name, default_resource_group_name, 
             msg = "--location is required to create the resource group {}."
             raise RequiredArgumentMissingError(msg.format(resource_group_name)) from err
         logger.warning("Could not find an Azure resource group, CAPZ will create one for you")
-    return resource_group_name
+        return False
+    return True
 
 
 # pylint: disable=inconsistent-return-statements
@@ -501,7 +500,7 @@ def create_workload_cluster(  # pylint: disable=too-many-arguments,too-many-loca
         bootstrap_cmds["pre"] += kubeadm_file_commands["pre"]
         bootstrap_cmds["post"] += kubeadm_file_commands["post"]
 
-    resource_group_name = check_resource_group(cmd, resource_group_name, capi_name, location)
+    check_resource_group(cmd, resource_group_name, capi_name, location)
 
     msg = f'Create the Kubernetes cluster "{capi_name}" in the Azure resource group "{resource_group_name}"?'
     if not yes and not prompt_y_n(msg, default="n"):

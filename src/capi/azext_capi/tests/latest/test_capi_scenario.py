@@ -27,7 +27,10 @@ class CapiScenarioTest(ScenarioTest):
         with patch('azext_capi._client_factory.cf_resource_groups') as cf_resource_groups:
             cf_resource_groups.return_value = mock_client
             with self.assertRaises(RequiredArgumentMissingError):
+                location = os.environ.pop('AZURE_LOCATION', None)
                 self.cmd('capi create')
+                if location:
+                    os.environ['AZURE_LOCATION'] = location
         # Test that --name is the only required arg if it already exists
         with patch('azext_capi._client_factory.cf_resource_groups') as cf_resource_groups:
             # If we got to user confirmation (NoTTYException), RG validation succeeded
@@ -44,7 +47,10 @@ class CapiScenarioTest(ScenarioTest):
         with patch('azext_capi._client_factory.cf_resource_groups') as cf_resource_groups:
             cf_resource_groups.return_value = mock_client
             with self.assertRaises(RequiredArgumentMissingError):
+                location = os.environ.pop('AZURE_LOCATION', None)
                 self.cmd('capi create -n myClusterName -g myCluster')
+                if location:
+                    os.environ['AZURE_LOCATION'] = location
         # New RG, no --location, AZURE_LOCATION set
         with patch.dict('os.environ', {"AZURE_LOCATION": "westus3"}):
             with patch('azext_capi.custom.check_resource_group') as mock_check_rg:
