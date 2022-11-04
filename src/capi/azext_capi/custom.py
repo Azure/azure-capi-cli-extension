@@ -620,14 +620,11 @@ clusterctl get kubeconfig {capi_name}
         apply_kubernetes_manifest(cmd, kubeproxy_manifest_file, workload_cfg, spinner_enter_message,
                                   spinner_exit_message, error_message)
 
-    # Wait for all nodes to be ready before returning
-    with Spinner(cmd, "Waiting for workload cluster nodes to be ready", "✓ Workload cluster is ready"):
-        kubectl_helpers.wait_for_nodes(workload_cfg)
-
-    if wait_for_nodes:
-        total_machine_count = int(control_plane_machine_count) + int(node_machine_count)
-        with Spinner(cmd, "Waiting for all workload cluster nodes to be ready", "✓ Workload cluster is ready"):
-            kubectl_helpers.wait_for_number_of_nodes(total_machine_count, workload_cfg)
+    # Wait for a node (or all nodes) to be ready before returning
+    node_count = 1 if not wait_for_nodes else int(control_plane_machine_count) + int(node_machine_count)
+    plural = "s" if node_count > 1 else ""
+    with Spinner(cmd, f"Waiting for {node_count} node{plural} to be ready", "✓ Workload cluster is ready"):
+        kubectl_helpers.wait_for_number_of_nodes(node_count, workload_cfg)
 
     if pivot:
         pivot_cluster(cmd, workload_cfg)
