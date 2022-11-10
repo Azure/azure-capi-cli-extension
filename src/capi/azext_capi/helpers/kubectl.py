@@ -170,12 +170,12 @@ def find_nodes(kubeconfig):
 def wait_for_number_of_nodes(number_of_nodes, kubeconfig=None):
     """
     Waits for nodes of specified cluster to get be ready before proceeding.
-    Timeout: 5 minutes
+    Timeout: 15 minutes
     """
     error_msg = "Not all cluster nodes are Ready after 10 minutes."
     command = ["kubectl", "get", "nodes", "-o", "json"]
     command += add_kubeconfig_to_command(kubeconfig)
-    timeout = 60 * 10
+    timeout = 60 * 15
     start = time.time()
     while time.time() < start + timeout:
         try:
