@@ -159,8 +159,10 @@ def create_aks_management_cluster(cmd, cluster_name, resource_group_name=None, l
         default_location = "southcentralus"
         msg = f"Please provide a location for {resource_group_name} resource group"
         location = get_user_prompt_or_default(msg, default_location, skip_prompt=yes)
-    if not create_resource_group(cmd, resource_group_name, location, yes, tags):
-        return False
+    # Don't recreate the resource group if it already exists: this overwrites existing tags.
+    if not check_resource_group(cmd, resource_group_name, cluster_name, location):
+        if not create_resource_group(cmd, resource_group_name, location, yes, tags):
+            return False
     command = ["az", "aks", "create", "-g", resource_group_name, "--name", cluster_name, "--generate-ssh-keys",
                "--network-plugin", "azure", "--network-policy", "calico", "--node-count", "1", "--tags", tags]
     try_command_with_spinner(cmd, command, "Creating Azure management cluster with AKS",
@@ -425,7 +427,8 @@ def check_resource_group(cmd, resource_group_name, default_resource_group_name, 
             msg = "--location is required to create the resource group {}."
             raise RequiredArgumentMissingError(msg.format(resource_group_name)) from err
         logger.warning("Could not find an Azure resource group, CAPZ will create one for you")
-    return resource_group_name
+        return False
+    return True
 
 
 # pylint: disable=inconsistent-return-statements
@@ -451,6 +454,7 @@ def create_workload_cluster(  # pylint: disable=too-many-arguments,too-many-loca
         user_provided_template=None,
         bootstrap_commands=None,
         yes=False,
+        wait_for_nodes=False,
         tags=""):
 
     if location is None:
@@ -496,7 +500,7 @@ def create_workload_cluster(  # pylint: disable=too-many-arguments,too-many-loca
         bootstrap_cmds["pre"] += kubeadm_file_commands["pre"]
         bootstrap_cmds["post"] += kubeadm_file_commands["post"]
 
-    resource_group_name = check_resource_group(cmd, resource_group_name, capi_name, location)
+    check_resource_group(cmd, resource_group_name, capi_name, location)
 
     msg = f'Create the Kubernetes cluster "{capi_name}" in the Azure resource group "{resource_group_name}"?'
     if not yes and not prompt_y_n(msg, default="n"):
@@ -615,9 +619,11 @@ clusterctl get kubeconfig {capi_name}
         apply_kubernetes_manifest(cmd, kubeproxy_manifest_file, workload_cfg, spinner_enter_message,
                                   spinner_exit_message, error_message)
 
-    # Wait for all nodes to be ready before returning
-    with Spinner(cmd, "Waiting for workload cluster nodes to be ready", "✓ Workload cluster is ready"):
-        kubectl_helpers.wait_for_nodes(workload_cfg)
+    # Wait for a node (or all nodes) to be ready before returning
+    node_count = 1 if not wait_for_nodes else int(control_plane_machine_count) + int(node_machine_count)
+    plural = "s" if node_count > 1 else ""
+    with Spinner(cmd, f"Waiting for {node_count} node{plural} to be ready", "✓ Workload cluster is ready"):
+        kubectl_helpers.wait_for_number_of_nodes(node_count, workload_cfg)
 
     if pivot:
         pivot_cluster(cmd, workload_cfg)
@@ -777,17 +783,17 @@ def update_workload_cluster(cmd, capi_name):
     raise NotImplementedError
 
 
-def install_tools(cmd, all_tools=False):
+def install_tools(cmd, all_tools=False, install_path=None):
     if all_tools:
         logger.info('Checking if required tools are installed')
-        check_tools(cmd, True)
+        check_tools(cmd, install=True, install_path=install_path)
     else:
-        logger.info('Installing individual tools is not currently supported')
+        logger.warning('Installing individual tools is not currently supported')
 
 
-def check_tools(cmd, install=False):
-    check_kubectl(cmd, install)
-    check_clusterctl(cmd, install)
+def check_tools(cmd, install=False, install_path=None):
+    check_kubectl(cmd, install=install, install_path=install_path)
+    check_clusterctl(cmd, install=install, install_path=install_path)
 
 
 def check_prereqs(cmd, install=False):

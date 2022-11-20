@@ -106,6 +106,9 @@ parameters:
   - name: --vnet-name
     type: string
     short-summary: Name of the Virtual Network to create
+  - name: --wait-for-nodes
+    type: bool
+    short-summary: Wait for workload nodes to be ready
   - name: --windows -w
     type: bool
     short-summary: Enable options for Windows
@@ -129,6 +132,8 @@ short-summary: Install all needed tools.
 parameters:
   - name: --all -a
     type: bool
+  - name: --install-path -ip
+    type: string
 """
 
 helps['capi show'] = """

@@ -44,9 +44,13 @@ def load_arguments(self, _):
         ctx.argument('tags',
                      options_list=['--tags', '-t'],
                      help="Tags applied to the AKS management cluster and resource group if created in Azure")
+        ctx.argument('wait_for_nodes', options_list=['--wait-for-nodes', '-wn'], help="Wait for nodes to be ready")
 
     with self.argument_context('capi install') as ctx:
-        ctx.argument('all_tools', capi_name_type, options_list=['--all', '-a'])
+        ctx.argument('all_tools', options_list=['--all', '-a'], help="Install all tools")
+        ctx.argument('install_path',
+                     options_list=['--install-path', '-ip'],
+                     help="Path to install the required tools to")
 
 
 def get_virtualenv():
