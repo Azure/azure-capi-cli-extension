@@ -10,9 +10,9 @@
 import base64
 import json
 import os
+import re
 import subprocess
 import time
-import re
 import yaml
 
 import azext_capi.helpers.kubectl as kubectl_helpers
@@ -21,27 +21,26 @@ import semver
 from azure.cli.core import get_default_cli
 from azure.cli.core.api import get_config_dir
 from azure.cli.core.azclierror import InvalidArgumentValueError
+from azure.cli.core.azclierror import MutuallyExclusiveArgumentError
 from azure.cli.core.azclierror import RequiredArgumentMissingError
-from azure.core.exceptions import ResourceNotFoundError as ResourceNotFoundException
 from azure.cli.core.azclierror import ResourceNotFoundError
 from azure.cli.core.azclierror import UnclassifiedUserFault
-from azure.cli.core.azclierror import MutuallyExclusiveArgumentError
+from azure.core.exceptions import ResourceNotFoundError as ResourceNotFoundException
 from jinja2 import Environment, PackageLoader, StrictUndefined
 from jinja2.exceptions import UndefinedError
 from knack.prompting import prompt_choice_list, prompt_y_n
 from msrestazure.azure_exceptions import CloudError
 
 from ._format import output_for_tsv, output_list_for_tsv
-from .helpers.generic import has_kind_prefix
-from .helpers.logger import logger
-from .helpers.spinner import Spinner
-from .helpers.run_command import run_shell_command, try_command_with_spinner
 from .helpers.binary import check_clusterctl, check_kubectl, check_kind
-from .helpers.prompt import get_cluster_name_by_user_prompt, get_user_prompt_or_default
-from .helpers.generic import match_output, is_clusterctl_compatible
-from .helpers.os import set_environment_variables, write_to_file
-from .helpers.network import urlretrieve
 from .helpers.constants import MANAGEMENT_RG_NAME
+from .helpers.generic import has_kind_prefix, match_output, is_clusterctl_compatible
+from .helpers.logger import logger
+from .helpers.network import urlretrieve
+from .helpers.os import prep_kube_config, set_environment_variables, write_to_file
+from .helpers.prompt import get_cluster_name_by_user_prompt, get_user_prompt_or_default
+from .helpers.run_command import run_shell_command, try_command_with_spinner
+from .helpers.spinner import Spinner
 
 
 def init_environment(cmd, prompt=True, management_cluster_name=None,
@@ -169,6 +168,7 @@ def create_aks_management_cluster(cmd, cluster_name, resource_group_name=None, l
                              "✓ Created AKS management cluster", "Couldn't create AKS management cluster")
     os.environ[MANAGEMENT_RG_NAME] = resource_group_name
     logger.warning("aks credentials will overwrite existing cluster config for cluster %s if it exists", cluster_name)
+    prep_kube_config()
     with Spinner(cmd, "Obtaining AKS credentials", "✓ Obtained AKS credentials"):
         command = ["az", "aks", "get-credentials", "-g", resource_group_name, "--name", cluster_name,
                    "--overwrite-existing"]
