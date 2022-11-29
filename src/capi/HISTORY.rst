@@ -8,6 +8,7 @@ Release History
 
 * Default `az capi create --kubernetes-version` to v1.25.3
 * Install Calico CNI with official Helm chart
+* Add "--wait-for-nodes" argument to "az capi create"
 
 0.0.6
 ++++++

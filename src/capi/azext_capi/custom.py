@@ -460,11 +460,13 @@ def create_workload_cluster(  # pylint: disable=too-many-arguments,too-many-loca
         user_provided_template=None,
         bootstrap_commands=None,
         yes=False,
-        wait_for_nodes=False,
+        wait_for_nodes=1,
         tags=""):
 
     if location is None:
         location = os.environ.get("AZURE_LOCATION", None)
+
+    wait_for_nodes = int(wait_for_nodes)
 
     if not capi_name:
         from .helpers.names import generate_cluster_name
@@ -596,10 +598,10 @@ clusterctl get kubeconfig {capi_name}
     install_cni(cmd, capi_name, workload_cfg, windows, args)
 
     # Wait for a node (or all nodes) to be ready before returning
-    node_count = 1 if not wait_for_nodes else int(control_plane_machine_count) + int(node_machine_count)
-    plural = "s" if node_count > 1 else ""
-    with Spinner(cmd, f"Waiting for {node_count} node{plural} to be ready", "✓ Workload cluster is ready"):
-        kubectl_helpers.wait_for_number_of_nodes(node_count, workload_cfg)
+    if wait_for_nodes > 0:
+        plural = "s" if wait_for_nodes > 1 else ""
+        with Spinner(cmd, f"Waiting for {wait_for_nodes} node{plural} to be ready", "✓ Workload cluster is ready"):
+            kubectl_helpers.wait_for_number_of_nodes(wait_for_nodes, workload_cfg)
 
     if pivot:
         pivot_cluster(cmd, workload_cfg)
