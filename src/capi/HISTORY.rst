@@ -3,6 +3,11 @@
 Release History
 ===============
 
+0.1.0
+++++++
+
+* Default `az capi create --kubernetes-version` to v1.25.3
+
 0.0.6
 ++++++
 
