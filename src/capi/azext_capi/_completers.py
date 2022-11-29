@@ -32,7 +32,7 @@ def get_kubernetes_version_completion_list(cmd, prefix, namespace, **kwargs):  #
 def get_workflow_clusters_completion_list(cmd, prefix, namespace, **kwargs):  # pylint: disable=unused-argument
     from .custom import list_workload_clusters
 
-    clusters = list_workload_clusters(None)
+    clusters = list_workload_clusters(cmd)
     return [i['metadata']['name'] for i in clusters.get('items', [])]
 
 
