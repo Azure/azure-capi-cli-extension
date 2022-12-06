@@ -15,9 +15,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
 
-    - uses: actions/setup-python@v1
+    - uses: actions/setup-python@v4
       with:
         python-version: 3.6
 
@@ -57,7 +57,7 @@ jobs:
         az extension list
         az capi -h
 
-    - uses: actions/upload-artifact@v1
+    - uses: actions/upload-artifact@v3
       with:
         name: dist
         path: dist
