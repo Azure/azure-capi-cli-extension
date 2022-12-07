@@ -8,6 +8,7 @@
 import os
 import platform
 import stat
+import tarfile
 
 from azure.cli.core.azclierror import FileOperationError
 from azure.cli.core.azclierror import InvalidArgumentValueError
@@ -40,6 +41,10 @@ def which(binary):
 
 def check_clusterctl(cmd, install=False, install_path=None):
     check_binary(cmd, "clusterctl", install_clusterctl, install=install, install_path=install_path)
+
+
+def check_helm(cmd, install=False, install_path=None):
+    check_binary(cmd, "helm", install_helm, install=install, install_path=install_path)
 
 
 def check_kind(cmd, install=False, install_path=None):
@@ -98,6 +103,39 @@ def install_clusterctl(_cmd, client_version="latest", install_location=None, sou
         os.makedirs(install_dir)
 
     return download_binary(install_location, install_dir, file_url, system, cli)
+
+
+def install_helm(_cmd, client_version="v3.10.2", install_location=None, source_url=None):
+    """
+    Install Helm, an installer and manager for Kubernetes resources.
+    """
+
+    tag = client_version
+    system = platform.system()
+    platform_os = system.lower()
+    arch = platform.machine()
+
+    if not source_url:
+        source_url = f"https://get.helm.sh/helm-{tag}-{platform_os}-{arch}.tar.gz"
+
+    # ensure installation directory exists
+    if install_location is not None:
+        install_location = f'{install_location}/helm'
+    else:
+        install_location = _get_default_install_location("helm")
+    install_dir, cli = os.path.dirname(install_location), os.path.basename(install_location)
+    if not os.path.exists(install_dir):
+        os.makedirs(install_dir)
+
+    tarball = f"{install_location}.tar.gz"
+    if download_binary(tarball, install_dir, source_url, system, cli):
+        with tarfile.open(tarball, "r:gz") as tar:
+            for m in tar.getmembers():
+                if m.isreg() and m.name.endswith("helm") or m.name.endswith("helm.exe"):
+                    m.name = os.path.basename(m.name)
+                    tar.extract(m, install_dir)
+                    break
+        os.remove(tarball)
 
 
 def install_kind(_cmd, client_version="v0.10.0", install_location=None, source_url=None):

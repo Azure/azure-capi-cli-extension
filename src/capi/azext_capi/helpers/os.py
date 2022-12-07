@@ -22,7 +22,8 @@ def write_to_file(filename, file_input):
     """
     Writes file_input into file
     """
-    with open(filename, "w", encoding="utf-8") as manifest_file:
+    descriptor = os.open(path=filename, flags=os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode=0o600)
+    with open(descriptor, "w", encoding="utf-8") as manifest_file:
         manifest_file.write(file_input)
 
 

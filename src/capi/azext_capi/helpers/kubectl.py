@@ -8,6 +8,7 @@ This module contains helper functions for the az capi extension.
 """
 
 import subprocess
+import tempfile
 import os
 import time
 import re
@@ -17,7 +18,7 @@ from azure.cli.core.azclierror import UnclassifiedUserFault
 from azure.cli.core.azclierror import ResourceNotFoundError
 from azure.cli.core.azclierror import InvalidArgumentValueError
 
-from .run_command import run_shell_command
+from .run_command import retry_shell_command, run_shell_command
 from .os import write_to_file
 from .generic import match_output
 from .logger import logger
@@ -280,3 +281,28 @@ def get_ports_cluster(kubeconfig=None):
         "coredns": match[1]
     }
     return result
+
+
+def get_configmap(kubeconfig, name, namespace):
+    """Returns the specified Kubernetes configmap as a YAML string."""
+    attempts, delay, output = 100, 3, ""
+    command = ["kubectl", "get", "configmap", name, "--namespace", namespace, "-o", "yaml", "--kubeconfig", kubeconfig]
+    try:
+        output = retry_shell_command(command, attempts, delay)
+    except subprocess.CalledProcessError as err:
+        raise ResourceNotFoundError(f"Couldn't find configmap {name} in namespace {namespace}") from err
+    return output
+
+
+def create_configmap(kubeconfig, data):
+    """Creates a Kubernetes configmap from a YAML string."""
+    with tempfile.NamedTemporaryFile(mode="w") as fp:
+        fp.write(data)
+        fp.flush()
+        attempts, delay, output = 100, 3, ""
+        command = ["kubectl", "create", "-f", fp.name, "--kubeconfig", kubeconfig]
+        try:
+            output = retry_shell_command(command, attempts, delay)
+        except subprocess.CalledProcessError as err:
+            raise ResourceNotFoundError("Couldn't create configmap") from err
+        return output

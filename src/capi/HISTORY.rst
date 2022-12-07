@@ -7,6 +7,7 @@ Release History
 ++++++
 
 * Default `az capi create --kubernetes-version` to v1.25.3
+* Install Calico CNI with official Helm chart
 
 0.0.6
 ++++++
