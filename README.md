@@ -20,7 +20,7 @@ extension to your Azure CLI to harness the power and flexibility of
 
 ## Developer Setup
 
-Developing this Azure CLI extension requires a virtual environment with Python 3.6 or later,
+Developing this Azure CLI extension requires a virtual environment with Python 3.7 or later,
 several required libraries, and the `azdev` tool.
 
 You can jump into development right now on the web or on your workstation with
@@ -41,7 +41,7 @@ running. After a few minutes, the virtual environment will be configured and rea
 
 ### Local Environment
 
-Create a [virtual environment](https://docs.python.org/3/tutorial/venv.html) for Python 3.6 or
+Create a [virtual environment](https://docs.python.org/3/tutorial/venv.html) for Python 3.7 or
 later, activate it, install required libraries, and tell the `azdev` tool about our
 "capi" extension:
 
