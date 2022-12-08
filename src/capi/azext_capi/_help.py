@@ -107,8 +107,8 @@ parameters:
     type: string
     short-summary: Name of the Virtual Network to create
   - name: --wait-for-nodes
-    type: bool
-    short-summary: Wait for workload nodes to be ready
+    type: integer
+    short-summary: Wait for N nodes to be ready
   - name: --windows -w
     type: bool
     short-summary: Enable options for Windows

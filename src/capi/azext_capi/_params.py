@@ -41,10 +41,9 @@ def load_arguments(self, _):
         ctx.argument('management_cluster_resource_group_name',
                      options_list=['--management-cluster-resource-group-name', '-mg'],
                      help="Resource group name of management cluster")
-        ctx.argument('tags',
-                     options_list=['--tags', '-t'],
+        ctx.argument('tags', options_list=['--tags', '-t'],
                      help="Tags applied to the AKS management cluster and resource group if created in Azure")
-        ctx.argument('wait_for_nodes', options_list=['--wait-for-nodes', '-wn'], help="Wait for nodes to be ready")
+        ctx.argument('wait_for_nodes', options_list=['--wait-for-nodes', '-wn'], help="Wait for N nodes to be ready")
 
     with self.argument_context('capi install') as ctx:
         ctx.argument('all_tools', options_list=['--all', '-a'], help="Install all tools")
