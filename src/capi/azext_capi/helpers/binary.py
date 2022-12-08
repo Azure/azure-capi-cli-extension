@@ -152,13 +152,16 @@ def install_helm(_cmd, client_version="v3.10.2", install_location=None, source_u
         os.remove(tarball)
 
 
-def install_kind(_cmd, client_version="v0.10.0", install_location=None, source_url=None):
+def install_kind(_cmd, client_version="v0.17.0", install_location=None, source_url=None):
     """
     Install kind, a container-based Kubernetes environment for development and testing.
     """
 
+    system = platform.system()
+    platform_os = system.lower()
+    arch = get_arch()
     if not source_url:
-        source_url = "https://kind.sigs.k8s.io/dl/{}/kind-{}-{}"
+        source_url = f"https://kind.sigs.k8s.io/dl/{client_version}/kind-{platform_os}-{arch}"
 
     # ensure installation directory exists
     if install_location is not None:
@@ -171,19 +174,7 @@ def install_kind(_cmd, client_version="v0.10.0", install_location=None, source_u
     if not os.path.exists(install_dir):
         os.makedirs(install_dir)
 
-    file_url = ""
-    system = platform.system()
-    arch = get_arch()
-    if system == "Windows":
-        file_url = source_url.format(client_version, "windows", arch)
-    elif system == "Linux":
-        file_url = source_url.format(client_version, "linux", arch)
-    elif system == "Darwin":
-        file_url = source_url.format(client_version, "darwin", arch)
-    else:
-        raise InvalidArgumentValueError(f'System "{system}" is not supported by kind.')
-
-    return download_binary(install_location, install_dir, file_url, system, cli)
+    return download_binary(install_location, install_dir, source_url, system, cli)
 
 
 def install_kubectl(cmd, client_version="latest", install_location=None, source_url=None):
