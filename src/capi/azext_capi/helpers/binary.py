@@ -71,6 +71,20 @@ def check_binary(cmd, binary_name, install_binary_method, install=False, install
                 install_binary_method(cmd, install_location=install_path)
 
 
+def get_arch(arch=None):
+    """Normalize python's platform.machine() output to match build architectures."""
+    if arch is None:
+        arch = platform.machine()
+    arch = arch.lower()
+    if arch == "x86_64":
+        return "amd64"
+    if arch == "aarch64":
+        return "arm64"
+    if arch == "armv7l":
+        return "arm"
+    return arch
+
+
 def install_clusterctl(_cmd, client_version="latest", install_location=None, source_url=None):
     """
     Install clusterctl, a command-line interface for Cluster API Kubernetes clusters.
@@ -82,12 +96,12 @@ def install_clusterctl(_cmd, client_version="latest", install_location=None, sou
 
     if client_version != "latest":
         source_url += "tags/"
-    source_url += "{}/download/clusterctl-{}-amd64"
+    source_url += "{}/download/clusterctl-{}-{}"
 
     file_url = ""
     system = platform.system()
     if system in ("Darwin", "Linux"):
-        file_url = source_url.format(client_version, system.lower())
+        file_url = source_url.format(client_version, system.lower(), get_arch())
     else:  # TODO: support Windows someday?
         raise ValidationError(f'The clusterctl binary is not available for "{system}"')
 
@@ -113,7 +127,7 @@ def install_helm(_cmd, client_version="v3.10.2", install_location=None, source_u
     tag = client_version
     system = platform.system()
     platform_os = system.lower()
-    arch = platform.machine()
+    arch = get_arch()
 
     if not source_url:
         source_url = f"https://get.helm.sh/helm-{tag}-{platform_os}-{arch}.tar.gz"
@@ -144,7 +158,7 @@ def install_kind(_cmd, client_version="v0.10.0", install_location=None, source_u
     """
 
     if not source_url:
-        source_url = "https://kind.sigs.k8s.io/dl/{}/kind-{}-amd64"
+        source_url = "https://kind.sigs.k8s.io/dl/{}/kind-{}-{}"
 
     # ensure installation directory exists
     if install_location is not None:
@@ -159,12 +173,13 @@ def install_kind(_cmd, client_version="v0.10.0", install_location=None, source_u
 
     file_url = ""
     system = platform.system()
+    arch = get_arch()
     if system == "Windows":
-        file_url = source_url.format(client_version, "windows")
+        file_url = source_url.format(client_version, "windows", arch)
     elif system == "Linux":
-        file_url = source_url.format(client_version, "linux")
+        file_url = source_url.format(client_version, "linux", arch)
     elif system == "Darwin":
-        file_url = source_url.format(client_version, "darwin")
+        file_url = source_url.format(client_version, "darwin", arch)
     else:
         raise InvalidArgumentValueError(f'System "{system}" is not supported by kind.')
 
@@ -190,7 +205,7 @@ def install_kubectl(cmd, client_version="latest", install_location=None, source_
 
     file_url = ""
     system = platform.system()
-    base_url = source_url + "/{}/bin/{}/amd64/{}"
+    base_url = source_url + "/{}/bin/{}/{}/{}"
 
     # ensure installation directory exists
     if install_location is not None:
@@ -203,13 +218,13 @@ def install_kubectl(cmd, client_version="latest", install_location=None, source_
     if not os.path.exists(install_dir):
         os.makedirs(install_dir)
 
+    arch = get_arch()
     if system == "Windows":
-        file_url = base_url.format(client_version, "windows", "kubectl.exe")
+        file_url = base_url.format(client_version, "windows", arch, "kubectl.exe")
     elif system == "Linux":
-        # TODO: Support ARM CPU here
-        file_url = base_url.format(client_version, "linux", "kubectl")
+        file_url = base_url.format(client_version, "linux", arch, "kubectl")
     elif system == "Darwin":
-        file_url = base_url.format(client_version, "darwin", "kubectl")
+        file_url = base_url.format(client_version, "darwin", arch, "kubectl")
     else:
         raise InvalidArgumentValueError(
             f"Proxy server ({system}) does not exist on the cluster."
