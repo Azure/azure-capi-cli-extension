@@ -637,7 +637,8 @@ def install_cni(cmd, cluster_name, workload_cfg, windows, args):
         interface0 = ipaddress.ip_interface(cidr0)
         interface1 = ipaddress.ip_interface(cidr1)
         if interface0.version == 6 and interface1.version == 4:
-            interface0, interface1 = interface1, interface0
+            cidr0, cidr1 = cidr1, cidr0
+            values_file = f"{file_base}/templates/addons/calico-dual-stack/values.yaml"
         if interface0.version == 4 and interface1.version == 6:
             values_file = f"{file_base}/templates/addons/calico-dual-stack/values.yaml"
     helminfo = HelmInfo(
