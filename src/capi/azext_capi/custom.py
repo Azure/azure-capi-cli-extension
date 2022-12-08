@@ -510,7 +510,8 @@ def create_workload_cluster(  # pylint: disable=too-many-arguments,too-many-loca
 
     check_resource_group(cmd, resource_group_name, capi_name, location)
 
-    msg = f'Create the Kubernetes cluster "{capi_name}" in the Azure resource group "{resource_group_name}"?'
+    rg_name = resource_group_name or capi_name
+    msg = f'Create the Kubernetes cluster "{capi_name}" in the Azure resource group "{rg_name}"?'
     if not yes and not prompt_y_n(msg, default="n"):
         return
 
