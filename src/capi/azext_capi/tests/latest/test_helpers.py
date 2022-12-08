@@ -19,6 +19,7 @@ from azure.cli.core.azclierror import ResourceNotFoundError
 import azext_capi.helpers.network as network
 import azext_capi.helpers.generic as generic
 from azext_capi.custom import create_resource_group, create_new_management_cluster, management_cluster_components_missing_matching_expressions, get_default_bootstrap_commands, parse_bootstrap_commands_from_file
+from azext_capi.helpers.binary import get_arch
 from azext_capi.helpers.prompt import get_user_prompt_or_default
 from azext_capi.helpers.kubectl import check_kubectl_namespace, find_attribute_in_context, find_kubectl_current_context, find_default_cluster, add_kubeconfig_to_command
 from azext_capi.helpers.names import generate_cluster_name
@@ -579,3 +580,21 @@ preferences: {}
                 os.environ["KUBECONFIG"] = original_config
             else:
                 del os.environ["KUBECONFIG"]
+
+
+class TestGetArch(unittest.TestCase):
+
+    def test_get_arch(self):
+        cases = {
+            "amd64": "amd64",
+            "AMD64": "amd64",
+            "x86_64": "amd64",
+            "arm64": "arm64",
+            "aarch64": "arm64",
+            "armv7l": "arm",
+            "ppc64le": "ppc64le",
+            "s390x": "s390x",
+            "unknown": "unknown",
+        }
+        for arch, expected in cases.items():
+            self.assertEqual(get_arch(arch), expected)
