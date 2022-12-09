@@ -3,6 +3,11 @@
 Release History
 ===============
 
+0.1.1
+++++++
+
+* Apply Windows kube-proxy manifest
+
 0.1.0
 ++++++
 

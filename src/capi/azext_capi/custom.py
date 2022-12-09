@@ -686,6 +686,8 @@ def install_cni_windows(cmd, args, workload_cfg, spinner_enter_message, spinner_
     kubeproxy_manifest_file = "kube-proxy-windows.yaml"
     manifest = render_custom_cluster_template(kubeproxy_manifest_url, kubeproxy_manifest_file, args)
     write_to_file(kubeproxy_manifest_file, manifest)
+    apply_kubernetes_manifest(cmd, kubeproxy_manifest_file, workload_cfg, spinner_enter_message,
+                              spinner_exit_message, error_message)
 
 
 def pivot_cluster(cmd, target_cluster_kubeconfig):
