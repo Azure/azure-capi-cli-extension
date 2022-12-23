@@ -7,12 +7,14 @@
 
 # pylint: disable=missing-docstring
 
+from collections import namedtuple
 import base64
+import ipaddress
 import json
 import os
+import re
 import subprocess
 import time
-import re
 import yaml
 
 import azext_capi.helpers.kubectl as kubectl_helpers
@@ -21,27 +23,27 @@ import semver
 from azure.cli.core import get_default_cli
 from azure.cli.core.api import get_config_dir
 from azure.cli.core.azclierror import InvalidArgumentValueError
+from azure.cli.core.azclierror import MutuallyExclusiveArgumentError
 from azure.cli.core.azclierror import RequiredArgumentMissingError
-from azure.core.exceptions import ResourceNotFoundError as ResourceNotFoundException
 from azure.cli.core.azclierror import ResourceNotFoundError
 from azure.cli.core.azclierror import UnclassifiedUserFault
-from azure.cli.core.azclierror import MutuallyExclusiveArgumentError
+from azure.core.exceptions import ResourceNotFoundError as ResourceNotFoundException
 from jinja2 import Environment, PackageLoader, StrictUndefined
 from jinja2.exceptions import UndefinedError
 from knack.prompting import prompt_choice_list, prompt_y_n
 from msrestazure.azure_exceptions import CloudError
 
 from ._format import output_for_tsv, output_list_for_tsv
-from .helpers.generic import has_kind_prefix
-from .helpers.logger import logger
-from .helpers.spinner import Spinner
-from .helpers.run_command import run_shell_command, try_command_with_spinner
-from .helpers.binary import check_clusterctl, check_kubectl, check_kind
-from .helpers.prompt import get_cluster_name_by_user_prompt, get_user_prompt_or_default
-from .helpers.generic import match_output, is_clusterctl_compatible
-from .helpers.os import set_environment_variables, write_to_file
-from .helpers.network import urlretrieve
+from .helpers.binary import check_clusterctl, check_helm, check_kubectl, check_kind
 from .helpers.constants import MANAGEMENT_RG_NAME
+from .helpers.generic import has_kind_prefix, match_output, is_clusterctl_compatible
+from .helpers.kubectl import create_configmap, get_configmap
+from .helpers.logger import logger
+from .helpers.network import urlretrieve
+from .helpers.os import prep_kube_config, set_environment_variables, write_to_file
+from .helpers.prompt import get_cluster_name_by_user_prompt, get_user_prompt_or_default
+from .helpers.run_command import retry_shell_command, run_shell_command, try_command_with_spinner
+from .helpers.spinner import Spinner
 
 
 def init_environment(cmd, prompt=True, management_cluster_name=None,
@@ -169,6 +171,7 @@ def create_aks_management_cluster(cmd, cluster_name, resource_group_name=None, l
                              "✓ Created AKS management cluster", "Couldn't create AKS management cluster")
     os.environ[MANAGEMENT_RG_NAME] = resource_group_name
     logger.warning("aks credentials will overwrite existing cluster config for cluster %s if it exists", cluster_name)
+    prep_kube_config()
     with Spinner(cmd, "Obtaining AKS credentials", "✓ Obtained AKS credentials"):
         command = ["az", "aks", "get-credentials", "-g", resource_group_name, "--name", cluster_name,
                    "--overwrite-existing"]
@@ -431,6 +434,9 @@ def check_resource_group(cmd, resource_group_name, default_resource_group_name, 
     return True
 
 
+HelmInfo = namedtuple("HelmInfo", ["repo_name", "repo_url", "chart_name", "chart", "values_file", "args"])
+
+
 # pylint: disable=inconsistent-return-statements
 def create_workload_cluster(  # pylint: disable=too-many-arguments,too-many-locals,too-many-statements
         cmd,
@@ -441,7 +447,7 @@ def create_workload_cluster(  # pylint: disable=too-many-arguments,too-many-loca
         control_plane_machine_count=os.environ.get("CONTROL_PLANE_MACHINE_COUNT", 3),
         node_machine_type=os.environ.get("AZURE_NODE_MACHINE_TYPE", "Standard_D2s_v3"),
         node_machine_count=os.environ.get("WORKER_MACHINE_COUNT", 3),
-        kubernetes_version=os.environ.get("KUBERNETES_VERSION", "v1.22.8"),
+        kubernetes_version=os.environ.get("KUBERNETES_VERSION", "v1.25.3"),
         ssh_public_key=os.environ.get("AZURE_SSH_PUBLIC_KEY", ""),
         external_cloud_provider=False,
         management_cluster_name=None,
@@ -454,11 +460,13 @@ def create_workload_cluster(  # pylint: disable=too-many-arguments,too-many-loca
         user_provided_template=None,
         bootstrap_commands=None,
         yes=False,
-        wait_for_nodes=False,
+        wait_for_nodes=1,
         tags=""):
 
     if location is None:
         location = os.environ.get("AZURE_LOCATION", None)
+
+    wait_for_nodes = int(wait_for_nodes)
 
     if not capi_name:
         from .helpers.names import generate_cluster_name
@@ -502,7 +510,8 @@ def create_workload_cluster(  # pylint: disable=too-many-arguments,too-many-loca
 
     check_resource_group(cmd, resource_group_name, capi_name, location)
 
-    msg = f'Create the Kubernetes cluster "{capi_name}" in the Azure resource group "{resource_group_name}"?'
+    rg_name = resource_group_name or capi_name
+    msg = f'Create the Kubernetes cluster "{capi_name}" in the Azure resource group "{rg_name}"?'
     if not yes and not prompt_y_n(msg, default="n"):
         return
 
@@ -559,16 +568,11 @@ def create_workload_cluster(  # pylint: disable=too-many-arguments,too-many-loca
     end_msg = f'✓ Created workload cluster "{capi_name}"'
     with Spinner(cmd, begin_msg, end_msg):
         command = ["kubectl", "apply", "-f", filename]
-        for _ in range(attempts):
-            try:
-                run_shell_command(command)
-                break
-            except subprocess.CalledProcessError as err:
-                logger.info(err)
-                time.sleep(delay)
-        else:
+        try:
+            retry_shell_command(command, attempts, delay)
+        except subprocess.CalledProcessError as err:
             msg = "Couldn't apply workload cluster manifest after waiting 5 minutes."
-            raise ResourceNotFoundError(msg)
+            raise ResourceNotFoundError(msg) from err
 
     # Write the kubeconfig for the workload cluster to a file.
     # Retry this operation several times, then give up and just print the command.
@@ -592,42 +596,98 @@ clusterctl get kubeconfig {capi_name}
     logger.warning('✓ Workload access configuration written to "%s"', workload_cfg)
 
     # Install CNI
-    calico_manifest = "https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/master/templates/addons/calico.yaml"  # pylint: disable=line-too-long
-    spinner_enter_message = "Deploying Container Network Interface (CNI) support"
-    spinner_exit_message = "✓ Deployed CNI to workload cluster"
-    error_message = "Couldn't install CNI after waiting 5 minutes."
-
-    apply_kubernetes_manifest(cmd, calico_manifest, workload_cfg, spinner_enter_message,
-                              spinner_exit_message, error_message)
-
-    if windows:
-        calico_manifest = "https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/main/templates/addons/windows/calico/calico.yaml"  # pylint: disable=line-too-long
-        spinner_enter_message = "Deploying Windows Calico support"
-        spinner_exit_message = "✓ Deployed Windows Calico support to workload cluster"
-        error_message = "Couldn't install Windows Calico support after waiting 5 minutes."
-        apply_kubernetes_manifest(cmd, calico_manifest, workload_cfg, spinner_enter_message,
-                                  spinner_exit_message, error_message)
-
-        kubeproxy_manifest_url = "https://github.com/kubernetes-sigs/cluster-api-provider-azure/blob/main/templates/addons/windows/calico/kube-proxy-windows.yaml"  # pylint: disable=line-too-long
-        kubeproxy_manifest_file = "kube-proxy-windows.yaml"
-        manifest = render_custom_cluster_template(kubeproxy_manifest_url, kubeproxy_manifest_file, args)
-        write_to_file(kubeproxy_manifest_file, manifest)
-
-        spinner_enter_message = "Deploying Windows kube-proxy support"
-        spinner_exit_message = "✓ Deployed Windows kube-proxy support to workload cluster"
-        error_message = "Couldn't install Windows kube-proxy support after waiting 5 minutes."
-        apply_kubernetes_manifest(cmd, kubeproxy_manifest_file, workload_cfg, spinner_enter_message,
-                                  spinner_exit_message, error_message)
+    install_cni(cmd, capi_name, workload_cfg, windows, args)
 
     # Wait for a node (or all nodes) to be ready before returning
-    node_count = 1 if not wait_for_nodes else int(control_plane_machine_count) + int(node_machine_count)
-    plural = "s" if node_count > 1 else ""
-    with Spinner(cmd, f"Waiting for {node_count} node{plural} to be ready", "✓ Workload cluster is ready"):
-        kubectl_helpers.wait_for_number_of_nodes(node_count, workload_cfg)
+    if wait_for_nodes > 0:
+        plural = "s" if wait_for_nodes > 1 else ""
+        with Spinner(cmd, f"Waiting for {wait_for_nodes} node{plural} to be ready", "✓ Workload cluster is ready"):
+            kubectl_helpers.wait_for_number_of_nodes(wait_for_nodes, workload_cfg)
 
     if pivot:
         pivot_cluster(cmd, workload_cfg)
     return show_workload_cluster(cmd, capi_name)
+
+
+def install_cni(cmd, cluster_name, workload_cfg, windows, args):
+    # Find the provisioned CIDR range(s) and pass to the CNI chart.
+    cidr0, cidr1 = "", ""
+    attempts, delay = 10, 3
+    with Spinner(cmd, "Finding provisioned CIDRs", "✓ Found provisioned CIDRs"):
+        command = ["kubectl", "get", "cluster", cluster_name, "-o=jsonpath={.spec.clusterNetwork.pods.cidrBlocks[0]}"]
+        try:
+            cidr0 = retry_shell_command(command, attempts, delay)
+        except subprocess.CalledProcessError:
+            pass  # This is a best-effort configuration, so don't fail if we can't find the CIDR.
+        attempts = 5
+        command = ["kubectl", "get", "cluster", cluster_name, "-o=jsonpath={.spec.clusterNetwork.pods.cidrBlocks[1]}"]
+        try:
+            cidr1 = retry_shell_command(command, attempts, delay)
+        except subprocess.CalledProcessError:
+            pass  # This is a best-effort configuration, so don't fail if we can't find the CIDR.
+
+    # Install Calico CNI using the official Helm chart.
+    file_base = "https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/main"
+    values_file = f"{file_base}/templates/addons/calico/values.yaml"
+    if cidr0 and not cidr1:
+        interface0 = ipaddress.ip_interface(cidr0)
+        if interface0.version == 6:
+            values_file = f"{file_base}/templates/addons/calico-ipv6/values.yaml"
+    elif cidr0 and cidr1:
+        interface0 = ipaddress.ip_interface(cidr0)
+        interface1 = ipaddress.ip_interface(cidr1)
+        if interface0.version == 6 and interface1.version == 4:
+            cidr0, cidr1 = cidr1, cidr0
+            values_file = f"{file_base}/templates/addons/calico-dual-stack/values.yaml"
+        if interface0.version == 4 and interface1.version == 6:
+            values_file = f"{file_base}/templates/addons/calico-dual-stack/values.yaml"
+    helminfo = HelmInfo(
+        repo_name="projectcalico",
+        repo_url="https://projectcalico.docs.tigera.io/charts",
+        chart_name="calico",
+        chart="projectcalico/tigera-operator",
+        values_file=values_file,
+        args=["--namespace", "tigera-operator", "--create-namespace"]
+    )
+    if cidr0:
+        helminfo.args.extend(["--set-string", f"installation.calicoNetwork.ipPools[0].cidr={cidr0}"])
+    if cidr1:
+        helminfo.args.extend(["--set-string", f"installation.calicoNetwork.ipPools[1].cidr={cidr1}"])
+    spinner_enter_message = "Deploying Container Network Interface (CNI) support"
+    spinner_exit_message = "✓ Deployed CNI to workload cluster"
+    error_message = "Couldn't install CNI after waiting 5 minutes."
+    install_helm_chart(cmd, helminfo, workload_cfg, spinner_enter_message, spinner_exit_message, error_message)
+
+    # Apply felix-override manifest.
+    spinner_enter_message = "Applying felix-override manifest"
+    spinner_exit_message = "✓ Applied felix-override manifest"
+    error_message = "Couldn't apply felix-override manifest after waiting 5 minutes."
+    felix_manifest = "https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/" + \
+        "main/templates/addons/calico/felix-override.yaml"
+    apply_kubernetes_manifest(cmd, felix_manifest, workload_cfg, spinner_enter_message,
+                              spinner_exit_message, error_message)
+
+    if windows:
+        install_cni_windows(cmd, args, workload_cfg, spinner_enter_message, spinner_exit_message, error_message)
+
+
+def install_cni_windows(cmd, args, workload_cfg, spinner_enter_message, spinner_exit_message, error_message):
+    """Copy a configmap and install Windows CNI via manifest: workarounds until the Helm chart supports Windows."""
+    configmap = get_configmap(workload_cfg, "kubeadm-config", "kube-system")
+    configmap = configmap.replace("namespace: kube-system", "namespace: calico-system")
+    create_configmap(workload_cfg, configmap)
+    calico_manifest = "https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/main/templates/addons/windows/calico/calico.yaml"  # pylint: disable=line-too-long
+    spinner_enter_message = "Deploying Windows Calico support"
+    spinner_exit_message = "✓ Deployed Windows Calico support to workload cluster"
+    error_message = "Couldn't install Windows Calico support after waiting 5 minutes."
+    apply_kubernetes_manifest(cmd, calico_manifest, workload_cfg, spinner_enter_message,
+                              spinner_exit_message, error_message)
+    kubeproxy_manifest_url = "https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/main/templates/addons/windows/calico/kube-proxy-windows.yaml"  # pylint: disable=line-too-long
+    kubeproxy_manifest_file = "kube-proxy-windows.yaml"
+    manifest = render_custom_cluster_template(kubeproxy_manifest_url, kubeproxy_manifest_file, args)
+    write_to_file(kubeproxy_manifest_file, manifest)
+    apply_kubernetes_manifest(cmd, kubeproxy_manifest_file, workload_cfg, spinner_enter_message,
+                              spinner_exit_message, error_message)
 
 
 def pivot_cluster(cmd, target_cluster_kubeconfig):
@@ -703,15 +763,30 @@ def apply_kubernetes_manifest(cmd, manifest, workload_cfg,
     attempts, delay = 100, 3
     with Spinner(cmd, spinner_enter_message, spinner_exit_message):
         command = ["kubectl", "apply", "-f", manifest, "--kubeconfig", workload_cfg]
-        for _ in range(attempts):
-            try:
-                run_shell_command(command)
-                break
-            except subprocess.CalledProcessError as err:
-                logger.info(err)
-                time.sleep(delay)
-        else:
-            raise ResourceNotFoundError(error_message)
+        try:
+            retry_shell_command(command, attempts, delay)
+        except subprocess.CalledProcessError as err:
+            raise ResourceNotFoundError(error_message) from err
+
+
+def install_helm_chart(cmd, helminfo, workload_cfg,
+                       spinner_enter_message, spinner_exit_message, error_message):
+    attempts, delay = 100, 3
+    with Spinner(cmd, spinner_enter_message, spinner_exit_message):
+        command = ["helm", "repo", "add", helminfo.repo_name, helminfo.repo_url, "--kubeconfig", workload_cfg]
+        try:
+            retry_shell_command(command, attempts, delay)
+        except subprocess.CalledProcessError as err:
+            raise ResourceNotFoundError(error_message) from err
+        command = ["helm", "install", helminfo.chart_name, helminfo.chart, "--kubeconfig", workload_cfg]
+        if helminfo.values_file:
+            command.extend(["--values", helminfo.values_file])
+        if helminfo.args:
+            command.extend(helminfo.args)
+        try:
+            retry_shell_command(command, attempts, delay)
+        except subprocess.CalledProcessError as err:
+            raise ResourceNotFoundError(error_message) from err
 
 
 def delete_workload_cluster(cmd, capi_name, resource_group_name=None, yes=False):
@@ -794,6 +869,7 @@ def install_tools(cmd, all_tools=False, install_path=None):
 def check_tools(cmd, install=False, install_path=None):
     check_kubectl(cmd, install=install, install_path=install_path)
     check_clusterctl(cmd, install=install, install_path=install_path)
+    check_helm(cmd, install=install, install_path=install_path)
 
 
 def check_prereqs(cmd, install=False):

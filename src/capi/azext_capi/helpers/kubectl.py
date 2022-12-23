@@ -8,16 +8,16 @@ This module contains helper functions for the az capi extension.
 """
 
 import subprocess
+import tempfile
 import os
 import time
 import re
-import json
 
 from azure.cli.core.azclierror import UnclassifiedUserFault
 from azure.cli.core.azclierror import ResourceNotFoundError
 from azure.cli.core.azclierror import InvalidArgumentValueError
 
-from .run_command import run_shell_command
+from .run_command import retry_shell_command, run_shell_command
 from .os import write_to_file
 from .generic import match_output
 from .logger import logger
@@ -131,7 +131,7 @@ def get_kubeconfig(capi_name):
     """Writes kubeconfig of specified cluster"""
     cmd = ["clusterctl", "get", "kubeconfig", capi_name]
     try:
-        output = run_shell_command(cmd, combine_std=False)
+        output = run_shell_command(cmd)
     except subprocess.CalledProcessError as err:
         raise UnclassifiedUserFault("Couldn't get kubeconfig") from err
     filename = capi_name + ".kubeconfig"
@@ -172,27 +172,26 @@ def wait_for_number_of_nodes(number_of_nodes, kubeconfig=None):
     Waits for nodes of specified cluster to get be ready before proceeding.
     Timeout: 15 minutes
     """
-    error_msg = "Not all cluster nodes are Ready after 10 minutes."
-    command = ["kubectl", "get", "nodes", "-o", "json"]
+    command = ["kubectl", "get", "nodes", "--no-headers"]
     command += add_kubeconfig_to_command(kubeconfig)
     timeout = 60 * 15
+    error_msg = f"Not all cluster nodes are Ready after {timeout//60} minutes."
     start = time.time()
     while time.time() < start + timeout:
         try:
-            kubectl_output = run_shell_command(command)
-            json_output = json.loads(kubectl_output)
-            ready_nodes = 0
-            for item in json_output["items"]:
-                for condition in item["status"]["conditions"]:
-                    if condition["type"] == "Ready" and condition["status"] == "True":
-                        ready_nodes += 1
-            if ready_nodes < number_of_nodes:
-                time.sleep(5)
-                continue
-            return
+            output = run_shell_command(command)
         except subprocess.CalledProcessError as err:
             logger.info(err)
             time.sleep(5)
+        # Example output:
+        #   modest-bagpiper-control-plane-ckt6r   Ready      control-plane   2m31s   v1.25.3
+        #   modest-bagpiper-md-0-gxb47            NotReady   <none>          25s     v1.25.3
+        ready_nodes = sum(1 for line in output.splitlines()
+                          if (cols := line.split()) and len(cols) > 1 and cols[1] == "Ready")
+        if ready_nodes < number_of_nodes:
+            time.sleep(5)
+            continue
+        return
     raise ResourceNotFoundError(error_msg)
 
 
@@ -280,3 +279,28 @@ def get_ports_cluster(kubeconfig=None):
         "coredns": match[1]
     }
     return result
+
+
+def get_configmap(kubeconfig, name, namespace):
+    """Returns the specified Kubernetes configmap as a YAML string."""
+    attempts, delay, output = 100, 3, ""
+    command = ["kubectl", "get", "configmap", name, "--namespace", namespace, "-o", "yaml", "--kubeconfig", kubeconfig]
+    try:
+        output = retry_shell_command(command, attempts, delay)
+    except subprocess.CalledProcessError as err:
+        raise ResourceNotFoundError(f"Couldn't find configmap {name} in namespace {namespace}") from err
+    return output
+
+
+def create_configmap(kubeconfig, data):
+    """Creates a Kubernetes configmap from a YAML string."""
+    with tempfile.NamedTemporaryFile(mode="w") as fp:
+        fp.write(data)
+        fp.flush()
+        attempts, delay, output = 100, 3, ""
+        command = ["kubectl", "create", "-f", fp.name, "--kubeconfig", kubeconfig]
+        try:
+            output = retry_shell_command(command, attempts, delay)
+        except subprocess.CalledProcessError as err:
+            raise ResourceNotFoundError("Couldn't create configmap") from err
+        return output

@@ -8,6 +8,7 @@ import os
 import sys
 import tempfile
 import unittest
+import yaml
 from collections import namedtuple
 from unittest.mock import patch, Mock
 
@@ -18,9 +19,11 @@ from azure.cli.core.azclierror import ResourceNotFoundError
 import azext_capi.helpers.network as network
 import azext_capi.helpers.generic as generic
 from azext_capi.custom import create_resource_group, create_new_management_cluster, management_cluster_components_missing_matching_expressions, get_default_bootstrap_commands, parse_bootstrap_commands_from_file
+from azext_capi.helpers.binary import get_arch
 from azext_capi.helpers.prompt import get_user_prompt_or_default
 from azext_capi.helpers.kubectl import check_kubectl_namespace, find_attribute_in_context, find_kubectl_current_context, find_default_cluster, add_kubeconfig_to_command
 from azext_capi.helpers.names import generate_cluster_name
+from azext_capi.helpers.os import prep_kube_config
 from azext_capi.helpers.run_command import try_command_with_spinner, run_shell_command
 
 
@@ -365,11 +368,11 @@ class ManagementClusterComponentsMissingMatchExpressionTest(unittest.TestCase):
         "No installation found"
     ]
 
-    def test_valid_matches(self):
+    def test_valid_mgmt_matches(self):
         for out in self.ValidCases:
             self.assertTrue(management_cluster_components_missing_matching_expressions(out))
 
-    def test_invalid_matches(self):
+    def test_invalid_mgmt_matches(self):
         for out in self.InvalidCases:
             self.assertIsNone(management_cluster_components_missing_matching_expressions(out))
 
@@ -539,3 +542,59 @@ class TestGenerateClusterName(unittest.TestCase):
         }
         for seed, name in cases.items():
             self.assertEqual(generate_cluster_name(seed), name)
+
+
+class TestPrepKubeConfig(unittest.TestCase):
+
+    def test_prepkubeconfig(self):
+        cases = {
+            "good": """\
+apiVersion: v1
+kind: Config
+preferences: {}
+clusters: []
+contexts: []
+users: []
+""",
+            "bad": """\
+apiVersion: v1
+kind: Config
+preferences: {}
+"""
+        }
+        for label in cases:
+            kubeconfig = cases[label]
+            original_config = os.environ.pop("KUBECONFIG", None)
+            with tempfile.NamedTemporaryFile("w") as f:
+                os.environ["KUBECONFIG"] = f.name
+                f.write(kubeconfig) and f.flush()
+                prep_kube_config()
+                config = yaml.safe_load(open(f.name))
+            self.assertEqual(config["apiVersion"], "v1")
+            self.assertEqual(config["kind"], "Config")
+            self.assertIsInstance(config["preferences"], dict)
+            self.assertIn("clusters", config) and self.assertIsInstance(config["clusters"], list)
+            self.assertIn("contexts", config) and self.assertIsInstance(config["contexts"], list)
+            self.assertIn("users", config) and self.assertIsInstance(config["users"], list)
+            if original_config:
+                os.environ["KUBECONFIG"] = original_config
+            else:
+                del os.environ["KUBECONFIG"]
+
+
+class TestGetArch(unittest.TestCase):
+
+    def test_get_arch(self):
+        cases = {
+            "amd64": "amd64",
+            "AMD64": "amd64",
+            "x86_64": "amd64",
+            "arm64": "arm64",
+            "aarch64": "arm64",
+            "armv7l": "arm",
+            "ppc64le": "ppc64le",
+            "s390x": "s390x",
+            "unknown": "unknown",
+        }
+        for arch, expected in cases.items():
+            self.assertEqual(get_arch(arch), expected)

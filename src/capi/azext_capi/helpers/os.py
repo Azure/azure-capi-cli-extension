@@ -4,6 +4,7 @@
 # --------------------------------------------------------------------------------------------
 
 import os
+import yaml
 
 
 def set_environment_variables(dic=None):
@@ -21,5 +22,26 @@ def write_to_file(filename, file_input):
     """
     Writes file_input into file
     """
-    with open(filename, "w", encoding="utf-8") as manifest_file:
+    descriptor = os.open(path=filename, flags=os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode=0o600)
+    with open(descriptor, "w", encoding="utf-8") as manifest_file:
         manifest_file.write(file_input)
+
+
+def prep_kube_config():
+    """Prepares kubeconfig file for safe use with the "az aks get-credentials" command."""
+    if "KUBECONFIG" in os.environ:
+        kubeconfig_path = os.environ["KUBECONFIG"].split(os.pathsep)[0]
+    else:
+        kubeconfig_path = os.path.join(os.path.expanduser('~'), '.kube', 'config')
+    if os.path.exists(kubeconfig_path):
+        with open(kubeconfig_path, "r+", encoding="utf-8") as fp:
+            config = yaml.safe_load(fp)
+            changed = False
+            for key in ["clusters", "contexts", "users"]:
+                if key not in config:
+                    config[key] = []
+                    changed = True
+            if changed:
+                fp.seek(0)
+                yaml.safe_dump(config, fp)
+                fp.truncate()
