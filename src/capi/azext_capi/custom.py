@@ -154,14 +154,14 @@ def create_management_cluster(cmd, cluster_name=None, resource_group_name=None, 
 
 
 def find_resource_group_name_of_aks_infrastructure(resource_group_name, cluster_name):
-    jmespath_query = "[].{name:name, group:resourceGroup}"
-    command = ["az", "aks", "show", "--resource-group", resource_group_name, "--name", cluster_name, "--query nodeResourceGroup", "--output tsv"]
+    jmespath_query = "nodeResourceGroup"
+    command = ["az", "aks", "show", "--resource-group", resource_group_name, "--name", cluster_name, "--query", jmespath_query, "--output", "tsv"]
     result = run_shell_command(command)    
     return result
 
 def find_aks_vnet_name(resource_group_name):
     jmespath_query = "[?starts_with(name, 'aks-vnet-')].name | [0]"
-    command = ["az", "network", "vnet", "list", "--resource-group", resource_group_name, "--query", jmespath_query, "--output tsv"]
+    command = ["az", "network", "vnet", "list", "--resource-group", resource_group_name, "--query", jmespath_query, "--output", "tsv"]
     result = run_shell_command(command)    
     return result
 
@@ -564,6 +564,8 @@ def create_workload_cluster(  # pylint: disable=too-many-arguments,too-many-loca
         "AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE": os.environ["AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE"],
         "PRE_BOOTSTRAP_CMDS": bootstrap_cmds["pre"],
         "POST_BOOTSTRAP_CMDS": bootstrap_cmds["post"],
+        "AKS_INFRA_RG_NAME": os.environ['AKS_INFRA_RG_NAME'],
+        "AKS_VNET_NAME": os.environ['AKS_VNET_NAME']
     }
 
     if not user_provided_template:
