@@ -155,13 +155,13 @@ def create_management_cluster(cmd, cluster_name=None, resource_group_name=None, 
 
 def find_resource_group_name_of_aks_infrastructure(resource_group_name, cluster_name):
     jmespath_query = "nodeResourceGroup"
-    command = ["az", "aks", "show", "--resource-group", resource_group_name, "--name", cluster_name, "--query", jmespath_query, "--output", "tsv"]
+    command = ["az", "aks", "show", "--resource-group", resource_group_name, "--name", cluster_name, "--query", jmespath_query]
     result = run_shell_command(command)    
     return result
 
 def find_aks_vnet_name(resource_group_name):
     jmespath_query = "[?starts_with(name, 'aks-vnet-')].name | [0]"
-    command = ["az", "network", "vnet", "list", "--resource-group", resource_group_name, "--query", jmespath_query, "--output", "tsv"]
+    command = ["az", "network", "vnet", "list", "--resource-group", resource_group_name, "--query", jmespath_query]
     result = run_shell_command(command)    
     return result
 
