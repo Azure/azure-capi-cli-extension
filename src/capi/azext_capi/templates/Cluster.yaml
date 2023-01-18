@@ -15,7 +15,7 @@ spec:
   clusterNetwork:
     pods:
       cidrBlocks:
-      - {% if WINDOWS %}11.244.0.0/16{% else %}192.168.0.0/16{% endif %}
+      - {% if WINDOWS %}10.244.0.0/16{% else %}192.168.0.0/16{% endif %}
   infrastructureRef:
     apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
     kind: AzureCluster
