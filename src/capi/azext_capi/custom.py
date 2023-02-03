@@ -658,15 +658,6 @@ def install_cni(cmd, cluster_name, workload_cfg, windows, args):
     error_message = "Couldn't install CNI after waiting 5 minutes."
     install_helm_chart(cmd, helminfo, workload_cfg, spinner_enter_message, spinner_exit_message, error_message)
 
-    # Apply felix-override manifest.
-    spinner_enter_message = "Applying felix-override manifest"
-    spinner_exit_message = "✓ Applied felix-override manifest"
-    error_message = "Couldn't apply felix-override manifest after waiting 5 minutes."
-    felix_manifest = "https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/" + \
-        "main/templates/addons/calico/felix-override.yaml"
-    apply_kubernetes_manifest(cmd, felix_manifest, workload_cfg, spinner_enter_message,
-                              spinner_exit_message, error_message)
-
     if windows:
         install_cni_windows(cmd, args, workload_cfg, spinner_enter_message, spinner_exit_message, error_message)
 
