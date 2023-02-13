@@ -7,6 +7,7 @@ Release History
 +++++
 
 * Update docker-in-docker script for CodeSpaces
+* Update to install KPNG instead of in-tree kube-proxy for Windows nodes
 
 0.1.2
 +++++
