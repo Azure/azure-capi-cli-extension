@@ -3,6 +3,11 @@
 Release History
 ===============
 
+0.1.3
++++++
+
+* Update docker-in-docker script for CodeSpaces
+
 0.1.2
 +++++
 
