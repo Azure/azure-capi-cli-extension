@@ -160,14 +160,16 @@ def find_resource_group_name_of_aks_infrastructure(resource_group_name, cluster_
     result = output.strip()
     return result
 
-def find_aks_vnet_name(resource_group_name):
+
+  def find_aks_vnet_name(resource_group_name):
     jmespath_query = "[?starts_with(name, 'aks-vnet-')].name | [0]"
     command = ["az", "network", "vnet", "list", "--resource-group", resource_group_name, "--query", jmespath_query, "--output", "tsv"]
     output = run_shell_command(command)
     result = output.strip()
     return result
 
-def create_aks_management_cluster(cmd, cluster_name, resource_group_name=None, location=None, yes=False, tags=""):
+
+  def create_aks_management_cluster(cmd, cluster_name, resource_group_name=None, location=None, yes=False, tags=""):
     if not resource_group_name:
         msg = "Please name the resource group for the management cluster"
         resource_group_name = get_user_prompt_or_default(msg, cluster_name, skip_prompt=yes)
@@ -183,7 +185,7 @@ def create_aks_management_cluster(cmd, cluster_name, resource_group_name=None, l
                "--network-plugin", "azure", "--network-policy", "calico", "--node-count", "1", "--tags", tags]
     try_command_with_spinner(cmd, command, "Creating Azure management cluster with AKS",
                              "✓ Created AKS management cluster", "Couldn't create AKS management cluster")
-    os.environ[MANAGEMENT_RG_NAME] = resource_group_name    
+    os.environ[MANAGEMENT_RG_NAME] = resource_group_name
     aks_infra_rg_name = find_resource_group_name_of_aks_infrastructure(resource_group_name, cluster_name)
     os.environ[AKS_INFRA_RG_NAME] = aks_infra_rg_name
     os.environ[AKS_VNET_NAME] = find_aks_vnet_name(aks_infra_rg_name)
