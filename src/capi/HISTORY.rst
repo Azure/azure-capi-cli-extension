@@ -3,6 +3,17 @@
 Release History
 ===============
 
+0.1.3
++++++
+
+* Update docker-in-docker script for CodeSpaces
+* Update to install KPNG instead of in-tree kube-proxy for Windows nodes
+
+0.1.2
++++++
+
+* Remove Felix CNI override workaround
+
 0.1.1
 ++++++
 

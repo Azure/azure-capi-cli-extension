@@ -677,20 +677,18 @@ def install_cni(cmd, cluster_name, workload_cfg, windows, args):
     error_message = "Couldn't install CNI after waiting 5 minutes."
     install_helm_chart(cmd, helminfo, workload_cfg, spinner_enter_message, spinner_exit_message, error_message)
 
-    # Apply felix-override manifest.
-    spinner_enter_message = "Applying felix-override manifest"
-    spinner_exit_message = "✓ Applied felix-override manifest"
-    error_message = "Couldn't apply felix-override manifest after waiting 5 minutes."
-    felix_manifest = "https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/" + \
-        "main/templates/addons/calico/felix-override.yaml"
-    apply_kubernetes_manifest(cmd, felix_manifest, workload_cfg, spinner_enter_message,
-                              spinner_exit_message, error_message)
-
     if windows:
-        install_cni_windows(cmd, args, workload_cfg, spinner_enter_message, spinner_exit_message, error_message)
+        install_cni_windows(cmd, workload_cfg, spinner_enter_message, spinner_exit_message, error_message)
+        windows_kpng = os.environ.get('WINDOWS_KPNG')
+        if not windows_kpng:
+            install_windows_kubeproxy(cmd, args, workload_cfg, spinner_enter_message,
+                                      spinner_exit_message, error_message)
+        else:
+            install_windows_kpng(cmd, args, workload_cfg, spinner_enter_message,
+                                 spinner_exit_message, error_message)
 
 
-def install_cni_windows(cmd, args, workload_cfg, spinner_enter_message, spinner_exit_message, error_message):
+def install_cni_windows(cmd, workload_cfg, spinner_enter_message, spinner_exit_message, error_message):
     """Copy a configmap and install Windows CNI via manifest: workarounds until the Helm chart supports Windows."""
     configmap = get_configmap(workload_cfg, "kubeadm-config", "kube-system")
     configmap = configmap.replace("namespace: kube-system", "namespace: calico-system")
@@ -701,11 +699,38 @@ def install_cni_windows(cmd, args, workload_cfg, spinner_enter_message, spinner_
     error_message = "Couldn't install Windows Calico support after waiting 5 minutes."
     apply_kubernetes_manifest(cmd, calico_manifest, workload_cfg, spinner_enter_message,
                               spinner_exit_message, error_message)
+
+
+def install_windows_kubeproxy(cmd, args, workload_cfg, spinner_enter_message, spinner_exit_message, error_message):
     kubeproxy_manifest_url = "https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/main/templates/addons/windows/calico/kube-proxy-windows.yaml"  # pylint: disable=line-too-long
     kubeproxy_manifest_file = "kube-proxy-windows.yaml"
     manifest = render_custom_cluster_template(kubeproxy_manifest_url, kubeproxy_manifest_file, args)
     write_to_file(kubeproxy_manifest_file, manifest)
+    spinner_enter_message = "Deploying Windows kube-proxy"
+    spinner_exit_message = "✓ Deployed Windows kube-proxy to workload cluster"
+    error_message = "Couldn't install Windows kube-proxy after waiting 5 minutes."
     apply_kubernetes_manifest(cmd, kubeproxy_manifest_file, workload_cfg, spinner_enter_message,
+                              spinner_exit_message, error_message)
+
+
+def install_windows_kpng(cmd, args, workload_cfg, spinner_enter_message, spinner_exit_message, error_message):
+    kpng_rbac_manifest_url = "https://raw.githubusercontent.com/kubernetes-sigs/windows-service-proxy/main/deploy/kpng-rbac.yaml"  # pylint: disable=line-too-long
+    kpng_rbac_manifest_file = "kpng-rback.yaml"
+    kpng_rbac_manifest = render_custom_cluster_template(kpng_rbac_manifest_url, kpng_rbac_manifest_file, args)
+    write_to_file(kpng_rbac_manifest_file, kpng_rbac_manifest)
+    spinner_enter_message = "Deploying Windows kpng-rbac rules"
+    spinner_exit_message = "✓ Deployed Windows kpng-rbac rules workload cluster"
+    error_message = "Couldn't install Windows kpng-rbac after waiting 5 minutes."
+    apply_kubernetes_manifest(cmd, kpng_rbac_manifest_file, workload_cfg, spinner_enter_message,
+                              spinner_exit_message, error_message)
+    kpng_manifest_url = "https://raw.githubusercontent.com/kubernetes-sigs/windows-service-proxy/main/deploy/kpng-windows-capz-calico.yaml"  # pylint: disable=line-too-long
+    kpng_manifest_file = "kpng.yaml"
+    kpng_manifest = render_custom_cluster_template(kpng_manifest_url, kpng_manifest_file, args)
+    write_to_file(kpng_manifest_file, kpng_manifest)
+    spinner_enter_message = "Deploying Windows kpng"
+    spinner_exit_message = "✓ Deployed Windows kpng to workload cluster"
+    error_message = "Couldn't install Windows kpng after waiting 5 minutes."
+    apply_kubernetes_manifest(cmd, kpng_manifest_file, workload_cfg, spinner_enter_message,
                               spinner_exit_message, error_message)
 
 
