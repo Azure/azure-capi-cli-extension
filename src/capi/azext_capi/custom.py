@@ -5,7 +5,7 @@
 
 """This module implements the behavior of `az capi` commands."""
 
-# pylint: disable=missing-docstring
+# pylint: disable=missing-docstring,too-many-lines
 
 from collections import namedtuple
 import base64
@@ -35,7 +35,7 @@ from msrestazure.azure_exceptions import CloudError
 
 from ._format import output_for_tsv, output_list_for_tsv
 from .helpers.binary import check_clusterctl, check_helm, check_kubectl, check_kind
-from .helpers.constants import MANAGEMENT_RG_NAME
+from .helpers.constants import MANAGEMENT_RG_NAME, AKS_INFRA_RG_NAME, AKS_VNET_NAME
 from .helpers.generic import has_kind_prefix, match_output, is_clusterctl_compatible
 from .helpers.kubectl import create_configmap, get_configmap
 from .helpers.logger import logger
@@ -153,6 +153,24 @@ def create_management_cluster(cmd, cluster_name=None, resource_group_name=None, 
     _install_capi_provider_components(cmd)
 
 
+def find_resource_group_name_of_aks_infrastructure(resource_group_name, cluster_name):
+    jmespath_query = "nodeResourceGroup"
+    command = ["az", "aks", "show", "--resource-group", resource_group_name, "--name", cluster_name, "--query",
+               jmespath_query, "--output", "tsv"]
+    output = run_shell_command(command)
+    result = output.strip()
+    return result
+
+
+def find_aks_vnet_name(resource_group_name):
+    jmespath_query = "[?starts_with(name, 'aks-vnet-')].name | [0]"
+    command = ["az", "network", "vnet", "list", "--resource-group", resource_group_name, "--query",
+               jmespath_query, "--output", "tsv"]
+    output = run_shell_command(command)
+    result = output.strip()
+    return result
+
+
 def create_aks_management_cluster(cmd, cluster_name, resource_group_name=None, location=None, yes=False, tags=""):
     if not resource_group_name:
         msg = "Please name the resource group for the management cluster"
@@ -170,6 +188,9 @@ def create_aks_management_cluster(cmd, cluster_name, resource_group_name=None, l
     try_command_with_spinner(cmd, command, "Creating Azure management cluster with AKS",
                              "✓ Created AKS management cluster", "Couldn't create AKS management cluster")
     os.environ[MANAGEMENT_RG_NAME] = resource_group_name
+    aks_infra_rg_name = find_resource_group_name_of_aks_infrastructure(resource_group_name, cluster_name)
+    os.environ[AKS_INFRA_RG_NAME] = aks_infra_rg_name
+    os.environ[AKS_VNET_NAME] = find_aks_vnet_name(aks_infra_rg_name)
     logger.warning("aks credentials will overwrite existing cluster config for cluster %s if it exists", cluster_name)
     prep_kube_config()
     with Spinner(cmd, "Obtaining AKS credentials", "✓ Obtained AKS credentials"):
@@ -549,6 +570,8 @@ def create_workload_cluster(  # pylint: disable=too-many-arguments,too-many-loca
         "AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE": os.environ["AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE"],
         "PRE_BOOTSTRAP_CMDS": bootstrap_cmds["pre"],
         "POST_BOOTSTRAP_CMDS": bootstrap_cmds["post"],
+        "AKS_INFRA_RG_NAME": os.environ['AKS_INFRA_RG_NAME'],
+        "AKS_VNET_NAME": os.environ['AKS_VNET_NAME']
     }
 
     if not user_provided_template:
