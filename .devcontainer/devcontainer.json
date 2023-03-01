@@ -34,6 +34,10 @@
 		"python.linting.pydocstylePath": "/usr/local/py-utils/bin/pydocstyle",
 		"python.linting.pylintPath": "/usr/local/py-utils/bin/pylint"
 	},
+		
+	"features": {
+		"sshd": "latest"
+	},
 
 	// Add the IDs of extensions you want installed when the container is created.
 	"extensions": [
