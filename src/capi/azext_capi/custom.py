@@ -5,7 +5,7 @@
 
 """This module implements the behavior of `az capi` commands."""
 
-# pylint: disable=missing-docstring
+# pylint: disable=missing-docstring,too-many-lines
 
 from collections import namedtuple
 import base64
