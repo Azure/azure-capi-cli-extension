@@ -570,8 +570,8 @@ def create_workload_cluster(  # pylint: disable=too-many-arguments,too-many-loca
         "AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE": os.environ["AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE"],
         "PRE_BOOTSTRAP_CMDS": bootstrap_cmds["pre"],
         "POST_BOOTSTRAP_CMDS": bootstrap_cmds["post"],
-        "AKS_INFRA_RG_NAME": os.environ['AKS_INFRA_RG_NAME'],
-        "AKS_VNET_NAME": os.environ['AKS_VNET_NAME']
+        "AKS_INFRA_RG_NAME": os.environ.get(AKS_INFRA_RG_NAME, None),
+        "AKS_VNET_NAME": os.environ.get(AKS_VNET_NAME, None)
     }
 
     if not user_provided_template:
