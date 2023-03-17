@@ -5,7 +5,7 @@
 
 """This module implements the behavior of `az capi` commands."""
 
-# pylint: disable=missing-docstring,too-many-lines
+# pylint: disable=missing-docstring
 
 from collections import namedtuple
 import base64
@@ -42,7 +42,7 @@ from .helpers.logger import logger
 from .helpers.network import urlretrieve
 from .helpers.os import prep_kube_config, set_environment_variables, write_to_file
 from .helpers.prompt import get_cluster_name_by_user_prompt, get_user_prompt_or_default
-from .helpers.run_command import retry_shell_command, run_shell_command, try_command_with_spinner
+from .helpers.run_command import message_variants, retry_shell_command, run_shell_command, try_command_with_spinner
 from .helpers.spinner import Spinner
 
 
@@ -50,8 +50,7 @@ def init_environment(cmd, prompt=True, management_cluster_name=None,
                      resource_group_name=None, location=None, tags=""):
     check_prereqs(cmd, install=True)
     # Create a management cluster if needed
-    use_new_cluster = False
-    pre_prompt = None
+    use_new_cluster, pre_prompt = False, None
     try:
         find_management_cluster_retry(cmd)
         cluster_name = kubectl_helpers.find_cluster_in_current_context()
@@ -67,7 +66,6 @@ def init_environment(cmd, prompt=True, management_cluster_name=None,
                        "Exit"]
             msg = "The default kubernetes cluster found is missing required components for a management cluster.\
                    \nDo you want to:"
-
             index_choice = 0
             if prompt:
                 index_choice = prompt_choice_list(msg, choices)
@@ -90,7 +88,6 @@ https://cluster-api.sigs.k8s.io/user/concepts.html
                                                              resource_group_name, location,
                                                              pre_prompt_text=pre_prompt, prompt=prompt, tags=tags):
         return False
-
     _create_azure_identity_secret(cmd)
     _install_capi_provider_components(cmd)
     return True
@@ -100,34 +97,25 @@ def _create_azure_identity_secret(cmd, kubeconfig=None):
     secret_name = os.environ["AZURE_CLUSTER_IDENTITY_SECRET_NAME"]
     secret_namespace = os.environ["AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE"]
     azure_client_secret = os.environ["AZURE_CLIENT_SECRET"]
-    begin_msg = "Creating Cluster Identity Secret"
-    end_msg = "✓ Created Cluster Identity Secret"
-    error_msg = "Can't create Cluster Identity Secret"
     command = ["kubectl", "create", "secret", "generic", secret_name, "--from-literal",
                f"clientSecret={azure_client_secret}", "--namespace", secret_namespace]
     command += kubectl_helpers.add_kubeconfig_to_command(kubeconfig)
-    try_command_with_spinner(cmd, command, begin_msg, end_msg, error_msg, True)
+    try_command_with_spinner(cmd, command, "Create cluster identity secret", True)
 
 
 def _install_capi_provider_components(cmd, kubeconfig=None):
     os.environ["EXP_MACHINE_POOL"] = "true"
     os.environ["EXP_CLUSTER_RESOURCE_SET"] = "true"
-    begin_msg = "Initializing management cluster"
-    end_msg = "✓ Initialized management cluster"
-    error_msg = "Couldn't install CAPI provider components in current cluster"
     command = ["clusterctl", "init", "--infrastructure", "azure"]
     command += kubectl_helpers.add_kubeconfig_to_command(kubeconfig)
-    try_command_with_spinner(cmd, command, begin_msg, end_msg, error_msg)
+    try_command_with_spinner(cmd, command, "Initialize management cluster")
 
 
 def create_resource_group(cmd, rg_name, location, yes=False, tags=""):
     msg = f'Create the Azure resource group "{rg_name}" in location "{location}"?'
     if yes or prompt_y_n(msg, default="n"):
         command = ["az", "group", "create", "-l", location, "-n", rg_name, "--tags", tags]
-        begin_msg = f"Creating Resource Group: {rg_name}"
-        end_msg = f"✓ Created Resource Group: {rg_name}"
-        err_msg = f"Could not create resource group {rg_name}"
-        try_command_with_spinner(cmd, command, begin_msg, end_msg, err_msg)
+        try_command_with_spinner(cmd, command, f"Create resource group {rg_name}")
         return True
     return False
 
@@ -157,18 +145,14 @@ def find_resource_group_name_of_aks_infrastructure(resource_group_name, cluster_
     jmespath_query = "nodeResourceGroup"
     command = ["az", "aks", "show", "--resource-group", resource_group_name, "--name", cluster_name, "--query",
                jmespath_query, "--output", "tsv"]
-    output = run_shell_command(command)
-    result = output.strip()
-    return result
+    return run_shell_command(command).strip()
 
 
 def find_aks_vnet_name(resource_group_name):
     jmespath_query = "[?starts_with(name, 'aks-vnet-')].name | [0]"
     command = ["az", "network", "vnet", "list", "--resource-group", resource_group_name, "--query",
                jmespath_query, "--output", "tsv"]
-    output = run_shell_command(command)
-    result = output.strip()
-    return result
+    return run_shell_command(command).strip()
 
 
 def create_aks_management_cluster(cmd, cluster_name, resource_group_name=None, location=None, yes=False, tags=""):
@@ -185,8 +169,7 @@ def create_aks_management_cluster(cmd, cluster_name, resource_group_name=None, l
             return False
     command = ["az", "aks", "create", "-g", resource_group_name, "--name", cluster_name, "--generate-ssh-keys",
                "--network-plugin", "azure", "--network-policy", "calico", "--node-count", "1", "--tags", tags]
-    try_command_with_spinner(cmd, command, "Creating Azure management cluster with AKS",
-                             "✓ Created AKS management cluster", "Couldn't create AKS management cluster")
+    try_command_with_spinner(cmd, command, "Create Azure management cluster with AKS")
     os.environ[MANAGEMENT_RG_NAME] = resource_group_name
     aks_infra_rg_name = find_resource_group_name_of_aks_infrastructure(resource_group_name, cluster_name)
     os.environ[AKS_INFRA_RG_NAME] = aks_infra_rg_name
@@ -227,10 +210,8 @@ Where do you want to create a management cluster?
             return False
     elif choice_index == 1:
         check_kind(cmd, install=not prompt)
-        begin_msg = f'Creating local management cluster "{cluster_name}" with kind'
-        end_msg = f'✓ Created local management cluster "{cluster_name}"'
         command = ["kind", "create", "cluster", "--name", cluster_name]
-        try_command_with_spinner(cmd, command, begin_msg, end_msg, "Couldn't create kind management cluster")
+        try_command_with_spinner(cmd, command, f'Create local management cluster "{cluster_name}" with kind')
     else:
         return False
     return True
@@ -239,20 +220,15 @@ Where do you want to create a management cluster?
 def find_resource_group_name_of_aks_cluster(cluster_name):
     jmespath_query = "[].{name:name, group:resourceGroup}"
     command = ["az", "aks", "list", "--query", jmespath_query]
-    result = run_shell_command(command)
-    result = json.loads(result)
-    result = [item for item in result if item['name'] == cluster_name]
-    if result:
-        return result[0]["group"]
-    return None
+    output = json.loads(run_shell_command(command))
+    result = [item for item in output if item['name'] == cluster_name]
+    return result[0]["group"] if result else None
 
 
 def delete_management_cluster(cmd, yes=False):  # pylint: disable=unused-argument
     exit_if_no_management_cluster()
     cluster_name = kubectl_helpers.find_cluster_in_current_context()
-
     msg = f"Do you want to delete {cluster_name} cluster?"
-
     cluster_resource_group = None
     is_kind_cluster = has_kind_prefix(cluster_name)
     if not is_kind_cluster:
@@ -261,7 +237,6 @@ def delete_management_cluster(cmd, yes=False):  # pylint: disable=unused-argumen
             prompt = f"Please enter resource group name of {cluster_name} AKS cluster: "
             cluster_resource_group = get_user_prompt_or_default(prompt, cluster_name, skip_prompt=yes)
             msg = f"Do you want to delete {cluster_name} cluster and resource group {cluster_resource_group}?"
-
     pre_workload_warning = f"""\
 Please make sure to delete all workload clusters managed by {cluster_name} management cluster before proceeding \
 to prevent any orphan workload cluster
@@ -269,7 +244,6 @@ to prevent any orphan workload cluster
     msg = pre_workload_warning + msg
     if not yes and not prompt_y_n(msg, default="n"):
         return
-
     if is_kind_cluster:
         delete_kind_cluster_from_current_context(cmd)
     else:
@@ -292,17 +266,13 @@ def show_management_cluster(_cmd, yes=False):
     path = os.path.join(get_config_dir(), "capi")
     if not os.path.exists(path):
         os.makedirs(path)
-    command = ["kubectl", "config", "get-contexts",
-               "--no-headers", "--output", "name"]
+    command = ["kubectl", "config", "get-contexts", "--no-headers", "--output", "name"]
     try:
         output = run_shell_command(command)
-        contexts = output.splitlines()
-        logger.info(contexts)
+        logger.info(output.splitlines())
     except subprocess.CalledProcessError as err:
         raise UnclassifiedUserFault from err
-
-    msg = path + "ok"
-    if not yes and prompt_y_n(msg, default="n"):
+    if not yes and prompt_y_n(path + "ok", default="n"):
         logger.info("yes")
     # TODO: echo details of the management cluster in all output formats
 
@@ -314,15 +284,8 @@ def update_management_cluster(cmd, yes=False):
         return
     # Check for clusterctl tool
     check_prereqs(cmd, install=yes)
-    command = [
-        "clusterctl",
-        "upgrade",
-        "apply",
-        "--management-group",
-        "capi-system/cluster-api",
-        "--contract",
-        "v1beta1",
-    ]
+    command = ["clusterctl", "upgrade", "apply", "--management-group",
+               "capi-system/cluster-api", "--contract", "v1beta1"]
     try:
         run_shell_command(command)
     except subprocess.CalledProcessError as err:
@@ -354,9 +317,7 @@ def generate_workload_cluster_configuration(cmd, filename, args, user_provided_t
 
 
 def render_builtin_jinja_template(args):
-    """
-    Use the built-in template and process it with Jinja
-    """
+    """Use the built-in template and process it with Jinja."""
     env = Environment(loader=PackageLoader("azext_capi", "templates"),
                       auto_reload=False, undefined=StrictUndefined)
     logger.debug("Available templates: %s", env.list_templates())
@@ -369,9 +330,7 @@ def render_builtin_jinja_template(args):
 
 
 def render_custom_cluster_template(template, filename, args=None):
-    """
-    Fetch a user-defined template and process it with "clusterctl generate"
-    """
+    """Fetch a user-defined template and process it with "clusterctl generate"."""
     set_environment_variables(args)
     command = ["clusterctl", "generate", "yaml", "--from"]
     if not is_clusterctl_compatible(template):
@@ -393,16 +352,10 @@ def render_custom_cluster_template(template, filename, args=None):
 
 
 def get_default_bootstrap_commands(windows=False):
-    '''
-    Returns a dictionary with default pre- and post-bootstrap VM commands
-    '''
-    pre_bootstrap_cmds = []
+    '''Returns a dictionary with default pre- and post-bootstrap VM commands.'''
     post_bootstrap_cmds = ["nssm set kubelet start SERVICE_AUTO_START",
                            "powershell C:/defender-exclude-calico.ps1"] if windows else []
-    bootstrap_cmds = {
-        "pre": pre_bootstrap_cmds,
-        "post": post_bootstrap_cmds
-    }
+    bootstrap_cmds = {"pre": [], "post": post_bootstrap_cmds}
     return bootstrap_cmds
 
 
@@ -420,11 +373,7 @@ def parse_bootstrap_commands_from_file(file_path):
             pre_commands = [value] if isinstance(value, str) else value
         elif key == "postBootstrapCommands":
             post_commands = [value] if isinstance(value, str) else value
-    result = {
-        "pre": pre_commands,
-        "post": post_commands
-    }
-    return result
+    return {"pre": pre_commands, "post": post_commands}
 
 
 def check_resource_group(cmd, resource_group_name, default_resource_group_name, location=None):
@@ -464,9 +413,9 @@ def create_workload_cluster(  # pylint: disable=too-many-arguments,too-many-loca
         capi_name=None,
         resource_group_name=None,
         location=None,
-        control_plane_machine_type=os.environ.get("AZURE_CONTROL_PLANE_MACHINE_TYPE", "Standard_D2s_v3"),
+        control_plane_machine_type=os.environ.get("AZURE_CONTROL_PLANE_MACHINE_TYPE", "Standard_B2s"),
         control_plane_machine_count=os.environ.get("CONTROL_PLANE_MACHINE_COUNT", 3),
-        node_machine_type=os.environ.get("AZURE_NODE_MACHINE_TYPE", "Standard_D2s_v3"),
+        node_machine_type=os.environ.get("AZURE_NODE_MACHINE_TYPE", "Standard_B2s"),
         node_machine_count=os.environ.get("WORKER_MACHINE_COUNT", 3),
         kubernetes_version=os.environ.get("KUBERNETES_VERSION", "v1.25.3"),
         ssh_public_key=os.environ.get("AZURE_SSH_PUBLIC_KEY", ""),
@@ -523,7 +472,6 @@ def create_workload_cluster(  # pylint: disable=too-many-arguments,too-many-loca
             raise MutuallyExclusiveArgumentError(error_msg)
 
     bootstrap_cmds = get_default_bootstrap_commands(windows)
-
     if bootstrap_commands:
         kubeadm_file_commands = parse_bootstrap_commands_from_file(bootstrap_commands)
         bootstrap_cmds["pre"] += kubeadm_file_commands["pre"]
@@ -676,88 +624,58 @@ def install_cni(cmd, cluster_name, workload_cfg, windows, args):
         helminfo.args.extend(["--set-string", f"installation.calicoNetwork.ipPools[0].cidr={cidr0}"])
     if cidr1:
         helminfo.args.extend(["--set-string", f"installation.calicoNetwork.ipPools[1].cidr={cidr1}"])
-    spinner_enter_message = "Deploying Container Network Interface (CNI) support"
-    spinner_exit_message = "✓ Deployed CNI to workload cluster"
-    error_message = "Couldn't install CNI after waiting 5 minutes."
-    install_helm_chart(cmd, helminfo, workload_cfg, spinner_enter_message, spinner_exit_message, error_message)
-
+    install_helm_chart(cmd, helminfo, workload_cfg, "Deploy container network interface (CNI) support")
     if windows:
-        install_cni_windows(cmd, workload_cfg, spinner_enter_message, spinner_exit_message, error_message)
+        install_cni_windows(cmd, workload_cfg, "Deploy Windows Calico support")
         windows_kpng = os.environ.get('WINDOWS_KPNG')
         if not windows_kpng:
-            install_windows_kubeproxy(cmd, args, workload_cfg, spinner_enter_message,
-                                      spinner_exit_message, error_message)
+            install_windows_kubeproxy(cmd, args, workload_cfg, "Deploy Windows kube-proxy")
         else:
-            install_windows_kpng(cmd, args, workload_cfg, spinner_enter_message,
-                                 spinner_exit_message, error_message)
+            install_windows_kpng(cmd, args, workload_cfg, "Deploy Windows kpng")
 
 
-def install_cni_windows(cmd, workload_cfg, spinner_enter_message, spinner_exit_message, error_message):
+def install_cni_windows(cmd, workload_cfg, msg):
     """Copy a configmap and install Windows CNI via manifest: workarounds until the Helm chart supports Windows."""
     configmap = get_configmap(workload_cfg, "kubeadm-config", "kube-system")
     configmap = configmap.replace("namespace: kube-system", "namespace: calico-system")
     create_configmap(workload_cfg, configmap)
     calico_manifest = "https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/main/templates/addons/windows/calico/calico.yaml"  # pylint: disable=line-too-long
-    spinner_enter_message = "Deploying Windows Calico support"
-    spinner_exit_message = "✓ Deployed Windows Calico support to workload cluster"
-    error_message = "Couldn't install Windows Calico support after waiting 5 minutes."
-    apply_kubernetes_manifest(cmd, calico_manifest, workload_cfg, spinner_enter_message,
-                              spinner_exit_message, error_message)
+    apply_kubernetes_manifest(cmd, calico_manifest, workload_cfg, msg)
 
 
-def install_windows_kubeproxy(cmd, args, workload_cfg, spinner_enter_message, spinner_exit_message, error_message):
+def install_windows_kubeproxy(cmd, args, workload_cfg, msg):
     kubeproxy_manifest_url = "https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/main/templates/addons/windows/calico/kube-proxy-windows.yaml"  # pylint: disable=line-too-long
     kubeproxy_manifest_file = "kube-proxy-windows.yaml"
     manifest = render_custom_cluster_template(kubeproxy_manifest_url, kubeproxy_manifest_file, args)
     write_to_file(kubeproxy_manifest_file, manifest)
-    spinner_enter_message = "Deploying Windows kube-proxy"
-    spinner_exit_message = "✓ Deployed Windows kube-proxy to workload cluster"
-    error_message = "Couldn't install Windows kube-proxy after waiting 5 minutes."
-    apply_kubernetes_manifest(cmd, kubeproxy_manifest_file, workload_cfg, spinner_enter_message,
-                              spinner_exit_message, error_message)
+    apply_kubernetes_manifest(cmd, kubeproxy_manifest_file, workload_cfg, msg)
 
 
-def install_windows_kpng(cmd, args, workload_cfg, spinner_enter_message, spinner_exit_message, error_message):
+def install_windows_kpng(cmd, args, workload_cfg, msg):
     kpng_rbac_manifest_url = "https://raw.githubusercontent.com/kubernetes-sigs/windows-service-proxy/main/deploy/kpng-rbac.yaml"  # pylint: disable=line-too-long
     kpng_rbac_manifest_file = "kpng-rback.yaml"
     kpng_rbac_manifest = render_custom_cluster_template(kpng_rbac_manifest_url, kpng_rbac_manifest_file, args)
     write_to_file(kpng_rbac_manifest_file, kpng_rbac_manifest)
-    spinner_enter_message = "Deploying Windows kpng-rbac rules"
-    spinner_exit_message = "✓ Deployed Windows kpng-rbac rules workload cluster"
-    error_message = "Couldn't install Windows kpng-rbac after waiting 5 minutes."
-    apply_kubernetes_manifest(cmd, kpng_rbac_manifest_file, workload_cfg, spinner_enter_message,
-                              spinner_exit_message, error_message)
+    apply_kubernetes_manifest(cmd, kpng_rbac_manifest_file, workload_cfg, "Deploy Windows kpng-rbac rules")
     kpng_manifest_url = "https://raw.githubusercontent.com/kubernetes-sigs/windows-service-proxy/main/deploy/kpng-windows-capz-calico.yaml"  # pylint: disable=line-too-long
     kpng_manifest_file = "kpng.yaml"
     kpng_manifest = render_custom_cluster_template(kpng_manifest_url, kpng_manifest_file, args)
     write_to_file(kpng_manifest_file, kpng_manifest)
-    spinner_enter_message = "Deploying Windows kpng"
-    spinner_exit_message = "✓ Deployed Windows kpng to workload cluster"
-    error_message = "Couldn't install Windows kpng after waiting 5 minutes."
-    apply_kubernetes_manifest(cmd, kpng_manifest_file, workload_cfg, spinner_enter_message,
-                              spinner_exit_message, error_message)
+    apply_kubernetes_manifest(cmd, kpng_manifest_file, workload_cfg, msg)
 
 
 def pivot_cluster(cmd, target_cluster_kubeconfig):
-
     logger.warning("Starting Pivot Process")
-
     begin_msg = "Installing Cluster API components in target management cluster"
     end_msg = "✓ Installed Cluster API components in target management cluster"
     with Spinner(cmd, begin_msg, end_msg):
         set_azure_identity_secret_env_vars()
         _create_azure_identity_secret(cmd, target_cluster_kubeconfig)
         _install_capi_provider_components(cmd, target_cluster_kubeconfig)
-
     with Spinner(cmd, "Waiting for workload cluster machines to be ready", "✓ Workload cluster machines are ready"):
         kubectl_helpers.wait_for_machines()
-
     command = ["clusterctl", "move", "--to-kubeconfig", target_cluster_kubeconfig]
-    begin_msg = "Moving cluster objects into target cluster"
-    end_msg = "✓ Moved cluster objects into target cluster"
-    error_msg = "Could not complete clusterctl move action"
-    try_command_with_spinner(cmd, command, begin_msg, end_msg, error_msg, True)
-
+    try_command_with_spinner(cmd, command, "Move cluster objects into target cluster", True)
     cluster_name = kubectl_helpers.find_cluster_in_current_context()
     if has_kind_prefix(cluster_name):
         delete_kind_cluster_from_current_context(cmd)
@@ -766,9 +684,7 @@ def pivot_cluster(cmd, target_cluster_kubeconfig):
         if not resource_group:
             raise UnclassifiedUserFault("Could not delete AKS management cluster, resource group missing")
         delete_aks_cluster(cmd, cluster_name, resource_group)
-
-    # Merge workload cluster kubeconfig and default kubeconfig.
-    # To preverse any previous existing contexts
+    # Merge workload cluster and default kubeconfigs to preserve existing contents.
     kubectl_helpers.merge_kubeconfig(target_cluster_kubeconfig)
     logger.warning("Completed Pivot Process")
     return True
@@ -776,10 +692,7 @@ def pivot_cluster(cmd, target_cluster_kubeconfig):
 
 def delete_kind_cluster(cmd, name):
     command = ["kind", "delete", "cluster", "--name", name]
-    begin_msg = f"Deleting {name} kind cluster"
-    end_msg = f"✓ Deleted {name} kind cluster"
-    error_msg = "Could not delete kind cluster"
-    try_command_with_spinner(cmd, command, begin_msg, end_msg, error_msg)
+    try_command_with_spinner(cmd, command, f"Delete {name} kind cluster")
 
 
 def delete_kind_cluster_from_current_context(cmd):
@@ -792,40 +705,34 @@ def delete_kind_cluster_from_current_context(cmd):
 
 def delete_aks_cluster(cmd, name, resource_group):
     command = ["az", "aks", "delete", "--name", name, "--resource-group", resource_group, "--yes"]
-    begin_msg = f"Deleting {name} AKS cluster"
-    end_msg = f"✓ Deleted {name} AKS cluster"
-    error_msg = "Could not delete AKS cluster"
-    try_command_with_spinner(cmd, command, begin_msg, end_msg, error_msg)
+    try_command_with_spinner(cmd, command, f"Delete {name} AKS cluster")
     command = ["az", "group", "delete", "--name", resource_group, "--yes"]
-    begin_msg = f"Deleting {name} resource group"
-    end_msg = f"✓ Deleted {name} resource group"
-    error_msg = "Could not delete resource group"
-    try_command_with_spinner(cmd, command, begin_msg, end_msg, error_msg)
+    try_command_with_spinner(cmd, command, f"Delete {name} resource group")
     # Need to clean kubeconfig context
     kubectl_helpers.reset_current_context_and_attributes()
     return True
 
 
-def apply_kubernetes_manifest(cmd, manifest, workload_cfg,
-                              spinner_enter_message, spinner_exit_message, error_message):
+def apply_kubernetes_manifest(cmd, manifest, workload_cfg, msg):
+    begin_msg, end_msg, err_msg = message_variants(msg)
     attempts, delay = 100, 3
-    with Spinner(cmd, spinner_enter_message, spinner_exit_message):
+    with Spinner(cmd, begin_msg, end_msg):
         command = ["kubectl", "apply", "-f", manifest, "--kubeconfig", workload_cfg]
         try:
             retry_shell_command(command, attempts, delay)
         except subprocess.CalledProcessError as err:
-            raise ResourceNotFoundError(error_message) from err
+            raise ResourceNotFoundError(err_msg) from err
 
 
-def install_helm_chart(cmd, helminfo, workload_cfg,
-                       spinner_enter_message, spinner_exit_message, error_message):
+def install_helm_chart(cmd, helminfo, workload_cfg, msg):
+    begin_msg, end_msg, err_msg = message_variants(msg)
     attempts, delay = 100, 3
-    with Spinner(cmd, spinner_enter_message, spinner_exit_message):
+    with Spinner(cmd, begin_msg, end_msg):
         command = ["helm", "repo", "add", helminfo.repo_name, helminfo.repo_url, "--kubeconfig", workload_cfg]
         try:
             retry_shell_command(command, attempts, delay)
         except subprocess.CalledProcessError as err:
-            raise ResourceNotFoundError(error_message) from err
+            raise ResourceNotFoundError(err_msg) from err
         command = ["helm", "install", helminfo.chart_name, helminfo.chart, "--kubeconfig", workload_cfg]
         if helminfo.values_file:
             command.extend(["--values", helminfo.values_file])
@@ -834,7 +741,7 @@ def install_helm_chart(cmd, helminfo, workload_cfg,
         try:
             retry_shell_command(command, attempts, delay)
         except subprocess.CalledProcessError as err:
-            raise ResourceNotFoundError(error_message) from err
+            raise ResourceNotFoundError(err_msg) from err
 
 
 def delete_workload_cluster(cmd, capi_name, resource_group_name=None, yes=False):
@@ -849,20 +756,16 @@ def delete_workload_cluster(cmd, capi_name, resource_group_name=None, yes=False)
         command = ["az", "group", "delete", "-n", resource_group_name, '-y']
     if not yes and not prompt_y_n(msg, default="n"):
         return
-    begin_msg = "Deleting workload cluster"
-    end_msg = "✓ Deleted workload cluster"
-    if capi_name == kubectl_helpers.find_cluster_in_current_context():
-        end_msg += f'\nNote: To also delete the management cluster, run "az capi management delete -n {capi_name}"'
-    err_msg = "Couldn't delete workload cluster"
-    try_command_with_spinner(cmd, command, begin_msg, end_msg, err_msg)
+    # if capi_name == kubectl_helpers.find_cluster_in_current_context():
+    #     end_msg += f'\nNote: To also delete the management cluster, run "az capi management delete -n {capi_name}"'
+    try_command_with_spinner(cmd, command, "Delete workload cluster")
     if is_self_managed:
         kubectl_helpers.reset_current_context_and_attributes()
 
 
 def get_azure_resource_group_from_azure_cluster(cluster_name, kubeconfig=None):
     output = kubectl_helpers.get_azure_cluster(cluster_name, kubeconfig)
-    output = json.loads(output)
-    return output["spec"]["resourceGroup"]
+    return json.loads(output)["spec"]["resourceGroup"]
 
 
 def is_self_managed_cluster(cluster_name):
@@ -873,14 +776,11 @@ def is_self_managed_cluster(cluster_name):
 
 def list_workload_clusters(cmd):  # pylint: disable=unused-argument
     exit_if_no_management_cluster()
-    command = ["kubectl", "get", "clusters", "-o", "json"]
     try:
-        output = run_shell_command(command)
+        output = run_shell_command(["kubectl", "get", "clusters", "-o", "json"])
     except subprocess.CalledProcessError as err:
         raise UnclassifiedUserFault("Couldn't list workload clusters") from err
-    if tab_separated_output(cmd):
-        return output_list_for_tsv(output)
-    return json.loads(output)
+    return output_list_for_tsv(output) if tab_separated_output(cmd) else json.loads(output)
 
 
 def tab_separated_output(cmd):
@@ -922,8 +822,6 @@ def check_tools(cmd, install=False, install_path=None):
 
 def check_prereqs(cmd, install=False):
     check_tools(cmd, install)
-
-    # Check for required environment variables
     # TODO: remove this when AAD Pod Identity becomes the default
     check_environment_variables()
 
@@ -932,9 +830,9 @@ def check_environment_variables():
     required_env_vars = ["AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_SUBSCRIPTION_ID", "AZURE_TENANT_ID"]
     missing_env_vars = [v for v in required_env_vars if not check_environment_var(v)]
     missing_vars_len = len(missing_env_vars)
-    if missing_vars_len != 0:
+    if missing_vars_len > 0:
         err_msg = f"Required environment variable {missing_env_vars[0]} was not found."
-        if missing_vars_len != 1:
+        if missing_vars_len > 1:
             missing_env_vars = ", ".join(missing_env_vars)
             err_msg = f"Required environment variables {missing_env_vars} were not found."
         raise RequiredArgumentMissingError(err_msg)
@@ -1007,7 +905,6 @@ def find_management_cluster():
             "pod": "capi-kubeadm-control-plane-controller-manager"
         }
     ]
-
     for component in components:
         kubectl_helpers.check_kubectl_namespace(component["namespace"])
         kubectl_helpers.check_pods_status_by_namespace(component["namespace"], component["err_msg"], component["pod"])

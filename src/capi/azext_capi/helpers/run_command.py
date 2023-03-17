@@ -24,15 +24,24 @@ def run_shell_command(command, combine_std=True):
     return output
 
 
-def try_command_with_spinner(cmd, command, spinner_begin_msg, spinner_end_msg,
-                             error_msg, include_error_stdout=False):
-    with Spinner(cmd, spinner_begin_msg, spinner_end_msg):
+def message_variants(template_msg):
+    # Find the first word and assume it's a capitalized verb.
+    verb, predicate = template_msg.split(" ", 1)
+    begin_msg = f"{verb[:-1]}ing {predicate}" if verb.endswith("e") else f"{verb}ing {predicate}"
+    end_msg = f"✓ {verb}d {predicate}" if verb.endswith("e") else f"✓ {verb}ed {predicate}"
+    error_msg = f"✗ Failed to {verb.lower()} {predicate}"
+    return begin_msg, end_msg, error_msg
+
+
+def try_command_with_spinner(cmd, command, spinner_msg, include_error_stdout=False):
+    begin_msg, end_msg, err_msg = message_variants(spinner_msg)
+    with Spinner(cmd, begin_msg, end_msg):
         try:
             run_shell_command(command)
         except (subprocess.CalledProcessError, FileNotFoundError) as err:
             if include_error_stdout:
-                error_msg += f"\n{err.stdout}"
-            raise UnclassifiedUserFault(error_msg) from err
+                err_msg += f"\n{err.stdout}"
+            raise UnclassifiedUserFault(err_msg) from err
 
 
 def retry_shell_command(command, attempts=100, delay=3):

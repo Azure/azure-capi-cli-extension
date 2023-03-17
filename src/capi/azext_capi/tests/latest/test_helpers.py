@@ -24,7 +24,7 @@ from azext_capi.helpers.prompt import get_user_prompt_or_default
 from azext_capi.helpers.kubectl import check_kubectl_namespace, find_attribute_in_context, find_kubectl_current_context, find_default_cluster, add_kubeconfig_to_command
 from azext_capi.helpers.names import generate_cluster_name
 from azext_capi.helpers.os import prep_kube_config
-from azext_capi.helpers.run_command import try_command_with_spinner, run_shell_command
+from azext_capi.helpers.run_command import message_variants, run_shell_command, try_command_with_spinner, run_shell_command
 
 
 class TestSSLContextHelper(unittest.TestCase):
@@ -294,9 +294,8 @@ class TryCommandWithSpinner(unittest.TestCase):
 
     def setUp(self):
         self.cmd = Mock()
-        self.begin_msg = "begin"
-        self.end_msg = "end"
-        self.error_msg = "error"
+        self.msg = "Test function"
+        self.error_msg = "✗ Failed to test function"
         self.command = ["fake-command"]
         self.spinner_patch = patch('azext_capi.helpers.run_command.Spinner')
         self.spinner_mock = self.spinner_patch.start()
@@ -305,16 +304,24 @@ class TryCommandWithSpinner(unittest.TestCase):
     # Test valid command run
     def test_command_run(self):
         with patch('subprocess.check_output') as mock:
-            try_command_with_spinner(self.cmd, self.command, self.begin_msg,
-                                     self.end_msg, self.error_msg)
+            try_command_with_spinner(self.cmd, self.command, self.msg)
             mock.assert_called_once()
 
     # Test invalid command run
     def test_invalid_command_run(self):
         with self.assertRaises(UnclassifiedUserFault) as cm:
-            try_command_with_spinner(self.cmd, self.command, self.begin_msg,
-                                     self.end_msg, self.error_msg)
+            try_command_with_spinner(self.cmd, self.command, self.msg)
         self.assertEquals(cm.exception.error_msg, self.error_msg)
+
+    # Test messsage variants function
+    def test_message_variants(self):
+        Case = namedtuple('Case', ['template', 'begin', 'end', 'error'])
+        cases = [
+            Case("Delete the cluster", "Deleting the cluster", "✓ Deleted the cluster", "✗ Failed to delete the cluster"),
+        ]
+        for case in cases:
+            with self.subTest(case=case):
+                self.assertEquals(message_variants(case.template), (case.begin, case.end, case.error))
 
 
 class CheckKubectlNamespaceTest(unittest.TestCase):
