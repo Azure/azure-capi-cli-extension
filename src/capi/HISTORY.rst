@@ -3,6 +3,12 @@
 Release History
 ===============
 
+0.1.4
++++++
+
+* Pin calico manifests at CAPZ release-1.7
+* Store AKS infra rg and vnet as environment variables
+
 0.1.3
 +++++
 

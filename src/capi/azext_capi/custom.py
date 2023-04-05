@@ -598,7 +598,7 @@ def install_cni(cmd, cluster_name, workload_cfg, windows, args):
             pass  # This is a best-effort configuration, so don't fail if we can't find the CIDR.
 
     # Install Calico CNI using the official Helm chart.
-    file_base = "https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/main"
+    file_base = "https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/release-1.7"
     values_file = f"{file_base}/templates/addons/calico/values.yaml"
     if cidr0 and not cidr1:
         interface0 = ipaddress.ip_interface(cidr0)
@@ -614,7 +614,7 @@ def install_cni(cmd, cluster_name, workload_cfg, windows, args):
             values_file = f"{file_base}/templates/addons/calico-dual-stack/values.yaml"
     helminfo = HelmInfo(
         repo_name="projectcalico",
-        repo_url="https://projectcalico.docs.tigera.io/charts",
+        repo_url="https://docs.tigera.io/calico/charts",
         chart_name="calico",
         chart="projectcalico/tigera-operator",
         values_file=values_file,
@@ -639,12 +639,12 @@ def install_cni_windows(cmd, workload_cfg, msg):
     configmap = get_configmap(workload_cfg, "kubeadm-config", "kube-system")
     configmap = configmap.replace("namespace: kube-system", "namespace: calico-system")
     create_configmap(workload_cfg, configmap)
-    calico_manifest = "https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/main/templates/addons/windows/calico/calico.yaml"  # pylint: disable=line-too-long
+    calico_manifest = "https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/release-1.7/templates/addons/windows/calico/calico.yaml"  # pylint: disable=line-too-long
     apply_kubernetes_manifest(cmd, calico_manifest, workload_cfg, msg)
 
 
 def install_windows_kubeproxy(cmd, args, workload_cfg, msg):
-    kubeproxy_manifest_url = "https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/main/templates/addons/windows/calico/kube-proxy-windows.yaml"  # pylint: disable=line-too-long
+    kubeproxy_manifest_url = "https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/release-1.7/templates/addons/windows/calico/kube-proxy-windows.yaml"  # pylint: disable=line-too-long
     kubeproxy_manifest_file = "kube-proxy-windows.yaml"
     manifest = render_custom_cluster_template(kubeproxy_manifest_url, kubeproxy_manifest_file, args)
     write_to_file(kubeproxy_manifest_file, manifest)
@@ -728,7 +728,8 @@ def install_helm_chart(cmd, helminfo, workload_cfg, msg):
     begin_msg, end_msg, err_msg = message_variants(msg)
     attempts, delay = 100, 3
     with Spinner(cmd, begin_msg, end_msg):
-        command = ["helm", "repo", "add", helminfo.repo_name, helminfo.repo_url, "--kubeconfig", workload_cfg]
+        command = ["helm", "repo", "add", helminfo.repo_name, helminfo.repo_url,
+                   "--kubeconfig", workload_cfg, "--force-update"]
         try:
             retry_shell_command(command, attempts, delay)
         except subprocess.CalledProcessError as err:
