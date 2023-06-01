@@ -6,6 +6,7 @@
 """This module implements the behavior of `az capi` commands."""
 
 # pylint: disable=missing-docstring
+# pylint: disable=line-too-long
 
 from collections import namedtuple
 import base64
@@ -35,7 +36,7 @@ from msrestazure.azure_exceptions import CloudError
 
 from ._format import output_for_tsv, output_list_for_tsv
 from .helpers.binary import check_clusterctl, check_helm, check_kubectl, check_kind
-from .helpers.constants import MANAGEMENT_RG_NAME, AKS_INFRA_RG_NAME, AKS_VNET_NAME
+from .helpers.constants import MANAGEMENT_RG_NAME, AKS_INFRA_RG_NAME, AKS_VNET_NAME, CAPZ_BASE_CONTENT_URL, DEFAULT_CALICO_VERSION
 from .helpers.generic import has_kind_prefix, match_output, is_clusterctl_compatible
 from .helpers.kubectl import create_configmap, get_configmap
 from .helpers.logger import logger
@@ -598,27 +599,26 @@ def install_cni(cmd, cluster_name, workload_cfg, windows, args):
             pass  # This is a best-effort configuration, so don't fail if we can't find the CIDR.
 
     # Install Calico CNI using the official Helm chart.
-    file_base = "https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/release-1.7"
-    values_file = f"{file_base}/templates/addons/calico/values.yaml"
+    values_file = f"{CAPZ_BASE_CONTENT_URL}/templates/addons/calico/values.yaml"
     if cidr0 and not cidr1:
         interface0 = ipaddress.ip_interface(cidr0)
         if interface0.version == 6:
-            values_file = f"{file_base}/templates/addons/calico-ipv6/values.yaml"
+            values_file = f"{CAPZ_BASE_CONTENT_URL}/templates/addons/calico-ipv6/values.yaml"
     elif cidr0 and cidr1:
         interface0 = ipaddress.ip_interface(cidr0)
         interface1 = ipaddress.ip_interface(cidr1)
         if interface0.version == 6 and interface1.version == 4:
             cidr0, cidr1 = cidr1, cidr0
-            values_file = f"{file_base}/templates/addons/calico-dual-stack/values.yaml"
+            values_file = f"{CAPZ_BASE_CONTENT_URL}/templates/addons/calico-dual-stack/values.yaml"
         if interface0.version == 4 and interface1.version == 6:
-            values_file = f"{file_base}/templates/addons/calico-dual-stack/values.yaml"
+            values_file = f"{CAPZ_BASE_CONTENT_URL}/templates/addons/calico-dual-stack/values.yaml"
     helminfo = HelmInfo(
         repo_name="projectcalico",
         repo_url="https://docs.tigera.io/calico/charts",
         chart_name="calico",
         chart="projectcalico/tigera-operator",
         values_file=values_file,
-        args=["--namespace", "tigera-operator", "--create-namespace"]
+        args=["--namespace", "tigera-operator", "--create-namespace", "--version", os.environ.get("CALICO_VERSION", DEFAULT_CALICO_VERSION)]
     )
     if cidr0:
         helminfo.args.extend(["--set-string", f"installation.calicoNetwork.ipPools[0].cidr={cidr0}"])
@@ -639,12 +639,17 @@ def install_cni_windows(cmd, workload_cfg, msg):
     configmap = get_configmap(workload_cfg, "kubeadm-config", "kube-system")
     configmap = configmap.replace("namespace: kube-system", "namespace: calico-system")
     create_configmap(workload_cfg, configmap)
-    calico_manifest = "https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/release-1.7/templates/addons/windows/calico/calico.yaml"  # pylint: disable=line-too-long
+    calico_manifest = f"{CAPZ_BASE_CONTENT_URL}/templates/addons/windows/calico/calico.yaml"  # pylint: disable=line-too-long
     apply_kubernetes_manifest(cmd, calico_manifest, workload_cfg, msg)
+
+    calico_version = os.environ.get("CALICO_VERSION", DEFAULT_CALICO_VERSION)
+    update_kubernetes_image(cmd, "calico-system", "daemonSet/calico-node-windows", "install-cni", f"sigwindowstools/calico-install:{calico_version}-hostprocess", workload_cfg, msg)
+    update_kubernetes_image(cmd, "calico-system", "daemonSet/calico-node-windows", "calico-node-startup", f"sigwindowstools/calico-node:{calico_version}-hostprocess", workload_cfg, msg)
+    update_kubernetes_image(cmd, "calico-system", "daemonSet/calico-node-windows", "calico-node-felix", f"sigwindowstools/calico-node:{calico_version}-hostprocess", workload_cfg, msg)
 
 
 def install_windows_kubeproxy(cmd, args, workload_cfg, msg):
-    kubeproxy_manifest_url = "https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-azure/release-1.7/templates/addons/windows/calico/kube-proxy-windows.yaml"  # pylint: disable=line-too-long
+    kubeproxy_manifest_url = f"{CAPZ_BASE_CONTENT_URL}/templates/addons/windows/calico/kube-proxy-windows.yaml"  # pylint: disable=line-too-long
     kubeproxy_manifest_file = "kube-proxy-windows.yaml"
     manifest = render_custom_cluster_template(kubeproxy_manifest_url, kubeproxy_manifest_file, args)
     write_to_file(kubeproxy_manifest_file, manifest)
@@ -718,6 +723,17 @@ def apply_kubernetes_manifest(cmd, manifest, workload_cfg, msg):
     attempts, delay = 100, 3
     with Spinner(cmd, begin_msg, end_msg):
         command = ["kubectl", "apply", "-f", manifest, "--kubeconfig", workload_cfg]
+        try:
+            retry_shell_command(command, attempts, delay)
+        except subprocess.CalledProcessError as err:
+            raise ResourceNotFoundError(err_msg) from err
+
+
+def update_kubernetes_image(cmd, namespace, resource_name, container_name, new_image_name, workload_cfg, msg):
+    begin_msg, end_msg, err_msg = message_variants(msg)
+    attempts, delay = 100, 3
+    with Spinner(cmd, begin_msg, end_msg):
+        command = ["kubectl", "set", "image", "-n", namespace, resource_name, f"{container_name}={new_image_name}", "--kubeconfig", workload_cfg]
         try:
             retry_shell_command(command, attempts, delay)
         except subprocess.CalledProcessError as err:
