@@ -34,6 +34,7 @@ jobs:
       run: |
         source env/bin/activate
 
+        azdev linter
         azdev style
 
     - name: Run unit tests

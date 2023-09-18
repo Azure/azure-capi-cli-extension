@@ -1,4 +1,4 @@
-azdev==0.1.48
+azdev
 black
 coverage
 Jinja2

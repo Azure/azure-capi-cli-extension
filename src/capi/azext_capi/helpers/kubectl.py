@@ -247,8 +247,8 @@ def check_pods_status_by_namespace(namespace, error_message, pod_name):
         try:
             output = run_shell_command(cmd)
             logger.debug(output)
-        except subprocess.CalledProcessError as err:
-            logger.error(err)
+        except subprocess.CalledProcessError as sub_err:
+            logger.error(sub_err)
         logger.error(err)
         raise
 

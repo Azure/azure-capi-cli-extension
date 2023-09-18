@@ -21,8 +21,8 @@ def load_command_table(self, _):
         g.custom_command('delete', 'delete_workload_cluster')
         g.custom_command('list', 'list_workload_clusters',
                          table_transformer=CLUSTERS_LIST_TABLE_FORMAT)
-        g.custom_command('show', 'show_workload_cluster',
-                         table_transformer=CLUSTER_TABLE_FORMAT)
+        g.custom_show_command('show', 'show_workload_cluster',
+                              table_transformer=CLUSTER_TABLE_FORMAT)
         g.custom_command('update', 'update_workload_cluster')
         g.custom_command('install', 'install_tools')
 
@@ -30,5 +30,5 @@ def load_command_table(self, _):
         g.custom_command('create', 'create_management_cluster')
         g.custom_command('delete', 'delete_management_cluster')
         g.custom_command('move', 'move_management_cluster')
-        g.custom_command('show', 'show_management_cluster')
+        g.custom_show_command('show', 'show_management_cluster')
         g.custom_command('update', 'update_management_cluster')

@@ -58,6 +58,7 @@ You can lint and test your code with these commands:
 ```shell
 source ./env/bin/activate
 
+azdev linter
 azdev style
 azdev test
 ```
