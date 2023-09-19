@@ -25,10 +25,12 @@ short-summary: Create a workload cluster
 long-summary: |
   See https://capz.sigs.k8s.io/ for more information
 parameters:
-  - name: --control-plane-machine-count
+  - name: --control-plane-machine-count -u
     type: integer
-  - name: --control-plane-machine-type
+    short-summary: Number of control plane machines
+  - name: --control-plane-machine-type -z
     type: string
+    short-summary: Type of control plane machine
   - name: --ephemeral-disks -e
     type: string
     short-summary: Use ephemeral disks
@@ -55,7 +57,7 @@ parameters:
         kubeadm init/join on each VM. To learn more, visit:
 
         https://cluster-api.sigs.k8s.io/tasks/kubeadm-bootstrap.html?#additional-features
-  - name: --external-cloud-provider
+  - name: --external-cloud-provider -x
     type: bool
     short-summary: Use the external (AKA "out-of-tree") Azure cloud-provider
   - name: --template
@@ -78,19 +80,21 @@ parameters:
   - name: --machinepool -m
     type: bool
     short-summary: Use experimental MachinePools instead of MachineDeployments
-  - name: --management-cluster-name
+  - name: --management-cluster-name -j
     type: string
     short-summary: Name for management cluster.
+  - name: --management-cluster-resource-group-name -q
+    type: string
+    short-summary: Resource group name of management cluster
   - name: --node-machine-count
     type: integer
+    short-summary: Number of node machines
   - name: --node-machine-type
     type: string
+    short-summary: Type of node machine
   - name: --name -n
     type: string
     long-summary: If not specified, a random name will be generated.
-  - name: --output-path -p
-    type: string
-    short-summary: Where to save helper commands when they are downloaded
   - name: --pivot
     type: bool
     short-summary: Move provider and CAPI resources to workload cluster.
@@ -103,6 +107,9 @@ parameters:
   - name: --ssh-public-key
     type: string
     short-summary: Public key contents to install on node VMs for SSH access.
+  - name: --tags -t
+    type: string
+    short-summary: Tags applied to the management cluster and resource group if using AKS
   - name: --vnet-name
     type: string
     short-summary: Name of the Virtual Network to create
@@ -132,8 +139,10 @@ short-summary: Install all needed tools.
 parameters:
   - name: --all -a
     type: bool
-  - name: --install-path -ip
+    short-summary: Install all tools
+  - name: --install-path -p
     type: string
+    short-summary: Path to install the required tools to
 """
 
 helps['capi show'] = """

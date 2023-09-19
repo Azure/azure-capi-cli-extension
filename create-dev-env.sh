@@ -22,5 +22,5 @@ fi
 source ./env/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
-pip install azdev==0.1.48
+pip install azdev
 azdev setup --repo . --ext capi --verbose

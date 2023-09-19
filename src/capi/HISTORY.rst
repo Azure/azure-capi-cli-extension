@@ -3,6 +3,9 @@
 Release History
 ===============
 
+0.1.6
++++++
+
 0.1.5
 +++++
 * Calico versions in helm charts are pinned to 3.25.1 and can be overridden with `CALICO_VERSION` environment variable

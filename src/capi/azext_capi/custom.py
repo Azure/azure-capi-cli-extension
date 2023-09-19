@@ -255,7 +255,7 @@ def move_management_cluster(cmd):
     raise NotImplementedError
 
 
-def show_management_cluster(_cmd, yes=False):
+def show_management_cluster(cmd, yes=False):  # pylint: disable=unused-argument
     # TODO: check to see if a management cluster is specified in the config
     config = get_default_cli().config
     # Config can also be set by the AZURE_CAPI_KUBECONFIG environment variable.
@@ -447,7 +447,7 @@ def create_workload_cluster(  # pylint: disable=too-many-arguments,too-many-loca
     if not kubernetes_version.startswith('v'):
         kubernetes_version = f'v{kubernetes_version}'
     try:
-        semver.parse(kubernetes_version[1:])
+        semver.VersionInfo.parse(kubernetes_version[1:])
     except ValueError as err:
         raise InvalidArgumentValueError(f'Invalid Kubernetes version: "{kubernetes_version}"') from err
 
