@@ -11,8 +11,13 @@ on:
 env:
   IMAGE: Azure/azure-capi-cli-extension
 
+permissions:
+  contents: read
+
 jobs:
   build:
+    permissions:
+      contents: write  # for actions/create-release to create a release
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
