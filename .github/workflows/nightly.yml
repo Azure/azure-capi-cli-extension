@@ -10,10 +10,15 @@ on:
 env:
   IMAGE: Azure/azure-capi-cli-extension
 
+permissions:
+  contents: read
+
 jobs:
 
   build:
     name: Build
+    permissions:
+      contents: write  # for pyTooling/releaser to create a release
     runs-on: ubuntu-latest
     steps:
     - name: Harden Runner
