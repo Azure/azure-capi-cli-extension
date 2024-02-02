@@ -4,4 +4,4 @@ coverage
 Jinja2
 MarkupSafe
 pytest-cov
-urllib3<2
+urllib3<3
