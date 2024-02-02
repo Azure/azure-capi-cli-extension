@@ -5,6 +5,7 @@ Release History
 
 0.1.6
 +++++
+* `--external-cloud-provider=true` is now the default for `az capi create`
 
 0.1.5
 +++++

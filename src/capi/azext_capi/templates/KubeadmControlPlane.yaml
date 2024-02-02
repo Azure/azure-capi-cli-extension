@@ -29,7 +29,7 @@ spec:
       apiServer:
         timeoutForControlPlane: 20m
         extraArgs:
-          cloud-provider: azure
+          cloud-provider: {% if EXTERNAL_CLOUD_PROVIDER %}external{% else %}azure{% endif %}
           cloud-config: /etc/kubernetes/azure.json
           {%- if WINDOWS %}
           feature-gates: WindowsHostProcessContainers=true
@@ -54,7 +54,7 @@ spec:
         local:
           dataDir: /var/lib/etcddisk/etcd
           extraArgs:
-            quota-backend-bytes: "8589934592"  
+            quota-backend-bytes: "8589934592"
     files:
     - contentFrom:
         secret:

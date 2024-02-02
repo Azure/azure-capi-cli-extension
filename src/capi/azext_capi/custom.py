@@ -24,7 +24,6 @@ import semver
 from azure.cli.core import get_default_cli
 from azure.cli.core.api import get_config_dir
 from azure.cli.core.azclierror import InvalidArgumentValueError
-from azure.cli.core.azclierror import MutuallyExclusiveArgumentError
 from azure.cli.core.azclierror import RequiredArgumentMissingError
 from azure.cli.core.azclierror import ResourceNotFoundError
 from azure.cli.core.azclierror import UnclassifiedUserFault
@@ -420,7 +419,7 @@ def create_workload_cluster(  # pylint: disable=too-many-arguments,too-many-loca
         node_machine_count=os.environ.get("WORKER_MACHINE_COUNT", 3),
         kubernetes_version=os.environ.get("KUBERNETES_VERSION", "v1.25.3"),
         ssh_public_key=os.environ.get("AZURE_SSH_PUBLIC_KEY", ""),
-        external_cloud_provider=False,
+        external_cloud_provider=True,
         management_cluster_name=None,
         management_cluster_resource_group_name=None,
         vnet_name=None,
@@ -451,6 +450,8 @@ def create_workload_cluster(  # pylint: disable=too-many-arguments,too-many-loca
     except ValueError as err:
         raise InvalidArgumentValueError(f'Invalid Kubernetes version: "{kubernetes_version}"') from err
 
+    # Warn that some `az capi create` flags expect template variables
+    # that may not be present in a user-provided template.
     if user_provided_template:
         mutual_exclusive_args = [
             {
@@ -469,8 +470,8 @@ def create_workload_cluster(  # pylint: disable=too-many-arguments,too-many-loca
         defined_args = [v["name"] for v in mutual_exclusive_args if v["value"]]
         if defined_args:
             defined_args = " ,".join(defined_args)
-            error_msg = f'The following arguments are incompatible with "--template":\n{defined_args}'
-            raise MutuallyExclusiveArgumentError(error_msg)
+            warning_msg = f'The following arguments may not work with "--template":\n{defined_args}'
+            logger.warning(warning_msg)
 
     bootstrap_cmds = get_default_bootstrap_commands(windows)
     if bootstrap_commands:
@@ -520,16 +521,11 @@ def create_workload_cluster(  # pylint: disable=too-many-arguments,too-many-loca
         "PRE_BOOTSTRAP_CMDS": bootstrap_cmds["pre"],
         "POST_BOOTSTRAP_CMDS": bootstrap_cmds["post"],
         "AKS_INFRA_RG_NAME": os.environ.get(AKS_INFRA_RG_NAME, None),
-        "AKS_VNET_NAME": os.environ.get(AKS_VNET_NAME, None)
+        "AKS_VNET_NAME": os.environ.get(AKS_VNET_NAME, None),
+        "EXTERNAL_CLOUD_PROVIDER": external_cloud_provider,
+        "WINDOWS": windows,
+        "EPHEMERAL": ephemeral_disks,
     }
-
-    if not user_provided_template:
-        jinja_extra_args = {
-            "EXTERNAL_CLOUD_PROVIDER": external_cloud_provider,
-            "WINDOWS": windows,
-            "EPHEMERAL": ephemeral_disks,
-        }
-        args.update(jinja_extra_args)
 
     filename = capi_name + ".yaml"
     generate_workload_cluster_configuration(cmd, filename, args, user_provided_template)
@@ -567,8 +563,15 @@ clusterctl get kubeconfig {capi_name}
     workload_cfg = capi_name + ".kubeconfig"
     logger.warning('✓ Workload access configuration written to "%s"', workload_cfg)
 
+    # Fetch the network address range(s) for the cluster.
+    cidr0, cidr1 = get_cidrs(cmd, capi_name)
+
+    # Install cloud-provider
+    if external_cloud_provider:
+        install_cloud_provider(cmd, capi_name, workload_cfg, cidr0, cidr1)
+
     # Install CNI
-    install_cni(cmd, capi_name, workload_cfg, windows, args)
+    install_cni(cmd, workload_cfg, cidr0, cidr1, windows, args)
 
     # Wait for a node (or all nodes) to be ready before returning
     if wait_for_nodes > 0:
@@ -581,11 +584,12 @@ clusterctl get kubeconfig {capi_name}
     return show_workload_cluster(cmd, capi_name)
 
 
-def install_cni(cmd, cluster_name, workload_cfg, windows, args):
-    # Find the provisioned CIDR range(s) and pass to the CNI chart.
+def get_cidrs(cmd, cluster_name):
+    # Find the provisioned network range(s) and return them as CIDRs.
+    # See https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing for more information about CIDRs.
     cidr0, cidr1 = "", ""
     attempts, delay = 10, 3
-    with Spinner(cmd, "Finding provisioned CIDRs", "✓ Found provisioned CIDRs"):
+    with Spinner(cmd, "Finding provisioned network ranges", "✓ Found provisioned network ranges"):
         command = ["kubectl", "get", "cluster", cluster_name, "-o=jsonpath={.spec.clusterNetwork.pods.cidrBlocks[0]}"]
         try:
             cidr0 = retry_shell_command(command, attempts, delay)
@@ -597,7 +601,28 @@ def install_cni(cmd, cluster_name, workload_cfg, windows, args):
             cidr1 = retry_shell_command(command, attempts, delay)
         except subprocess.CalledProcessError:
             pass  # This is a best-effort configuration, so don't fail if we can't find the CIDR.
+    return cidr0, cidr1
 
+
+def install_cloud_provider(cmd, cluster_name, workload_cfg, cidr0, cidr1):
+    cidr_list = cidr0
+    if cidr1:
+        cidr_list += f",{cidr1}"
+    helminfo = HelmInfo(
+        repo_name="cloud-provider-azure",
+        repo_url="https://raw.githubusercontent.com/kubernetes-sigs/cloud-provider-azure/master/helm/repo",
+        chart_name="cloud-provider-azure",
+        chart="cloud-provider-azure/cloud-provider-azure",
+        values_file=None,
+        args=[
+            "--set", f"infra.clusterName={cluster_name}",
+            "--set", f"cloudControllerManager.clusterCIDR={cidr_list}"
+        ],
+    )
+    install_helm_chart(cmd, helminfo, workload_cfg, "Deploy cloud-provider-azure support")
+
+
+def install_cni(cmd, workload_cfg, cidr0, cidr1, windows, args):
     # Install Calico CNI using the official Helm chart.
     values_file = f"{CAPZ_BASE_CONTENT_URL}/templates/addons/calico/values.yaml"
     if cidr0 and not cidr1:
