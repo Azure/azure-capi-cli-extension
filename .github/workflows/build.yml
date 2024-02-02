@@ -64,7 +64,7 @@ jobs:
 
     - name: Validate extension can be installed
       run: |
-        az extension add -s dist/${{ env.WHEEL }} -y
+        az extension add --allow-preview --source dist/${{ env.WHEEL }} -y
         az extension list
         az capi -h
 
@@ -95,7 +95,7 @@ jobs:
         release_name: ${{ github.ref }}
         body: |
           ```bash
-          az extension add --source https://github.com/Azure/azure-capi-cli-extension/releases/download/v${{ env.VERSION }}/${{ env.WHEEL }}
+          az extension add --allow-preview --source https://github.com/Azure/azure-capi-cli-extension/releases/download/v${{ env.VERSION }}/${{ env.WHEEL }}
           ```
         draft: true
         prerelease: true

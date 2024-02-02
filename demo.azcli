@@ -1,4 +1,4 @@
-az extension add --source https://github.com/Azure/azure-capi-cli-extension/releases/download/v0.0.3/capi-0.0.3-py2.py3-none-any.whl --upgrade
+az extension add --allow-preview --source https://github.com/Azure/azure-capi-cli-extension/releases/download/az-capi-nightly/capi-0.0.vnext-py2.py3-none-any.whl --upgrade
 az capi create -n testcluster1 -l southcentralus --output=table -y
 clusterctl describe cluster testcluster1
 az capi delete -n testcluster1
