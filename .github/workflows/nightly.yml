@@ -19,6 +19,7 @@ jobs:
     name: Build
     permissions:
       contents: write  # for pyTooling/releaser to create a release
+      packages: write  # for pyTooling/releaser to upload a package
     runs-on: ubuntu-latest
     steps:
     - name: Harden Runner
