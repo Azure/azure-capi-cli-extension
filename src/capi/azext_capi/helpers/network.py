@@ -7,25 +7,16 @@
 This module contains helper functions for the az capi extension.
 """
 from urllib.parse import urlparse
-import platform
 import ssl
-import sys
 
 from six.moves.urllib.request import urlopen
-
-from azure.cli.core.util import in_cloud_console
 
 
 def ssl_context():
     """Returns an SSL context appropriate for the python version and environment."""
-    if sys.version_info < (3, 4) or (in_cloud_console() and platform.system() == "Windows"):
-        try:
-            # added in python 2.7.13 and 3.6
-            return ssl.SSLContext(ssl.PROTOCOL_TLS)
-        except AttributeError:
-            return ssl.SSLContext(ssl.PROTOCOL_TLSv1)
-
-    return ssl.create_default_context()
+    context = ssl.create_default_context()
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
+    return context
 
 
 def urlretrieve(url, filename):
