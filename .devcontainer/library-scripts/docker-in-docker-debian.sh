@@ -264,10 +264,10 @@ else
         export PIP_CACHE_DIR=/tmp/pip-tmp/cache
         pipx_bin=pipx
         if ! type pipx > /dev/null 2>&1; then
-            pip3 install --disable-pip-version-check --no-cache-dir --user pipx
+            pip3 install --disable-pip-version-check --no-cache-dir --user "pipx>=1.4.3,<2.0"
             pipx_bin=/tmp/pip-tmp/bin/pipx
         fi
-        ${pipx_bin} install --pip-args '--no-cache-dir --force-reinstall' docker-compose
+        ${pipx_bin} install --pip-args '--no-cache-dir --force-reinstall' "docker-compose>=1.29,<2.0"
         rm -rf /tmp/pip-tmp
     else
         compose_v1_version="1"

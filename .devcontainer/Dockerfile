@@ -1,8 +1,8 @@
 # See here for image contents: https://github.com/microsoft/vscode-dev-containers/tree/v0.163.1/containers/python-3/.devcontainer/base.Dockerfile
 
 # [Choice] Python version: 3, 3.11, 3.10, 3.9, 3.8, 3.7
-ARG VARIANT="3"
-FROM mcr.microsoft.com/vscode/devcontainers/python:0-${VARIANT}
+ARG VARIANT="3.11"
+FROM mcr.microsoft.com/vscode/devcontainers/python:0-${VARIANT}@sha256:452e43dd2381de67191c53f7692433baba156ee9138ccfaed5124ff26c63eaed
 
 # Install Docker-in-Docker support
 COPY .devcontainer/library-scripts/*.sh /tmp/library-scripts/
