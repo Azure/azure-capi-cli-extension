@@ -29,9 +29,9 @@ class CapiScenarioTest(ScenarioTest):
             with self.assertRaises(RequiredArgumentMissingError):
                 location = os.environ.pop('AZURE_LOCATION', None)
                 with patch('azext_capi.custom.prompt_y_n', return_value=True):
-                  self.cmd('capi create')
-                  if location:
-                      os.environ['AZURE_LOCATION'] = location
+                    self.cmd('capi create')
+                    if location:
+                        os.environ['AZURE_LOCATION'] = location
         # Test that --name is the only required arg if it already exists
         with patch('azext_capi._client_factory.cf_resource_groups') as cf_resource_groups:
             # If we got to InvalidArgumentValueError, RG validation succeeded
