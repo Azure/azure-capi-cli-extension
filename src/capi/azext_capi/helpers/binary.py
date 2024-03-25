@@ -92,7 +92,6 @@ def install_clusterctl(_cmd, client_version="latest", install_location=None, sou
 
     if not source_url:
         source_url = "https://github.com/kubernetes-sigs/cluster-api/releases/"
-        # TODO: mirror clusterctl binary to Azure China cloud--see install_kubectl().
 
     if client_version != "latest":
         source_url += "tags/"
@@ -102,7 +101,7 @@ def install_clusterctl(_cmd, client_version="latest", install_location=None, sou
     system = platform.system()
     if system in ("Darwin", "Linux"):
         file_url = source_url.format(client_version, system.lower(), get_arch())
-    else:  # TODO: support Windows someday?
+    else:
         raise ValidationError(f'The clusterctl binary is not available for "{system}"')
 
     # ensure installation directory exists
@@ -144,10 +143,10 @@ def install_helm(_cmd, client_version="v3.10.2", install_location=None, source_u
     tarball = f"{install_location}.tar.gz"
     if download_binary(tarball, install_dir, source_url, system, cli):
         with tarfile.open(tarball, "r:gz") as tar:
-            for m in tar.getmembers():
-                if m.isreg() and m.name.endswith("helm") or m.name.endswith("helm.exe"):
-                    m.name = os.path.basename(m.name)
-                    tar.extract(m, install_dir)
+            for member in tar.getmembers():
+                if member.isreg() and member.name.endswith("helm") or member.name.endswith("helm.exe"):
+                    member.name = os.path.basename(member.name)
+                    tar.extract(member, install_dir)
                     break
         os.remove(tarball)
 
@@ -189,8 +188,8 @@ def install_kubectl(cmd, client_version="latest", install_location=None, source_
             source_url = "https://mirror.azure.cn/kubernetes/kubectl"
 
     if client_version == "latest":
-        with urlopen(source_url + "/stable.txt", context=ssl_context()) as f:
-            client_version = f.read().decode("utf-8").strip()
+        with urlopen(source_url + "/stable.txt", context=ssl_context()) as manifest:
+            client_version = manifest.read().decode("utf-8").strip()
     else:
         client_version = f"v{client_version}"
 

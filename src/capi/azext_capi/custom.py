@@ -5,8 +5,10 @@
 
 """This module implements the behavior of `az capi` commands."""
 
+# pylint: disable=fixme
 # pylint: disable=missing-docstring
 # pylint: disable=line-too-long
+# pylint: disable=too-many-arguments
 
 from collections import namedtuple
 import base64
@@ -39,6 +41,7 @@ from .helpers.constants import MANAGEMENT_RG_NAME, AKS_INFRA_RG_NAME, AKS_VNET_N
 from .helpers.generic import has_kind_prefix, match_output, is_clusterctl_compatible
 from .helpers.kubectl import create_configmap, get_configmap
 from .helpers.logger import logger
+from .helpers.names import generate_cluster_name
 from .helpers.network import urlretrieve
 from .helpers.os import prep_kube_config, set_environment_variables, write_to_file
 from .helpers.prompt import get_cluster_name_by_user_prompt, get_user_prompt_or_default
@@ -387,12 +390,12 @@ def check_resource_group(cmd, resource_group_name, default_resource_group_name, 
     if not resource_group_name:
         resource_group_name = default_resource_group_name
     try:
-        rg = rg_client.get(resource_group_name)
+        resource_group = rg_client.get(resource_group_name)
         if not location:
-            location = rg.location
-        elif location != rg.location:
+            location = resource_group.location
+        elif location != resource_group.location:
             msg = "--location is {}, but the resource group {} already exists in {}."
-            raise InvalidArgumentValueError(msg.format(location, resource_group_name, rg.location))
+            raise InvalidArgumentValueError(msg.format(location, resource_group_name, resource_group.location))
     except (CloudError, ResourceNotFoundException) as err:
         if 'could not be found' not in err.message:
             raise
@@ -439,7 +442,6 @@ def create_workload_cluster(  # pylint: disable=too-many-arguments,too-many-loca
     wait_for_nodes = int(wait_for_nodes)
 
     if not capi_name:
-        from .helpers.names import generate_cluster_name
         capi_name = generate_cluster_name()
         logger.warning('Using generated cluster name "%s"', capi_name)
 

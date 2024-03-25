@@ -14,6 +14,7 @@ from azure.cli.core.decorators import Completer
 
 @Completer
 def get_kubernetes_version_completion_list(cmd, prefix, namespace, **kwargs):  # pylint: disable=unused-argument
+    """Return a list of SKU versions for the CAPZ marketplace offer."""
     import re
 
     from azure.cli.command_modules.vm.custom import list_vm_images
@@ -22,14 +23,15 @@ def get_kubernetes_version_completion_list(cmd, prefix, namespace, **kwargs):  #
     regex = re.compile(r'k8s-(\d)dot(\d+)dot(\d+)-')
 
     def extract_version(sku):
-        m = regex.match(sku)
-        return ".".join(m.groups()) if m else ""
+        match = regex.match(sku)
+        return ".".join(match.groups()) if match else ""
 
     return [extract_version(i['sku']) for i in result]
 
 
 @Completer
 def get_workflow_clusters_completion_list(cmd, prefix, namespace, **kwargs):  # pylint: disable=unused-argument
+    """Return a list of the names of workload clusters."""
     from .custom import list_workload_clusters
 
     clusters = list_workload_clusters(cmd)
@@ -69,8 +71,8 @@ def _get_location_from_resource_group(cli_ctx, resource_group_name):
 
     location = None
     try:
-        rg = cf_resource_groups(cli_ctx).get(resource_group_name)
-        location = rg.location
+        resource_group = cf_resource_groups(cli_ctx).get(resource_group_name)
+        location = resource_group.location
     except CloudError as err:
         # Print a warning if the user hit [TAB] but the `--resource-group` argument was incorrect.
         # For example: "Warning: Resource group 'bogus' could not be found."
