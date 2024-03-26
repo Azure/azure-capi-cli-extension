@@ -175,7 +175,7 @@ def wait_for_number_of_nodes(number_of_nodes, kubeconfig=None):
     command = ["kubectl", "get", "nodes", "--no-headers"]
     command += add_kubeconfig_to_command(kubeconfig)
     timeout = 60 * 15
-    error_msg = f"Not all cluster nodes are Ready after {timeout//60} minutes."
+    error_msg = f"Not all cluster nodes are Ready after {timeout // 60} minutes."
     start = time.time()
     while time.time() < start + timeout:
         try:
@@ -294,11 +294,11 @@ def get_configmap(kubeconfig, name, namespace):
 
 def create_configmap(kubeconfig, data):
     """Creates a Kubernetes configmap from a YAML string."""
-    with tempfile.NamedTemporaryFile(mode="w") as fp:
-        fp.write(data)
-        fp.flush()
+    with tempfile.NamedTemporaryFile(mode="w") as temp_file:
+        temp_file.write(data)
+        temp_file.flush()
         attempts, delay, output = 100, 3, ""
-        command = ["kubectl", "create", "-f", fp.name, "--kubeconfig", kubeconfig]
+        command = ["kubectl", "create", "-f", temp_file.name, "--kubeconfig", kubeconfig]
         try:
             output = retry_shell_command(command, attempts, delay)
         except subprocess.CalledProcessError as err:

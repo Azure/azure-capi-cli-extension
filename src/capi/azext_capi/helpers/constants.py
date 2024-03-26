@@ -3,6 +3,10 @@
 # Licensed under the MIT License. See License.txt in the project root for license information.
 # --------------------------------------------------------------------------------------------
 
+"""
+Constant values used in the az capi extension.
+"""
+
 MANAGEMENT_RG_NAME = "MANAGEMENT_RG_NAME"
 KUBECONFIG = "KUBECONFIG"
 AKS_INFRA_RG_NAME = "AKS_INFRA_RG_NAME"

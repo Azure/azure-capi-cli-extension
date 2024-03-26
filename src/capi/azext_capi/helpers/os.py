@@ -3,6 +3,10 @@
 # Licensed under the MIT License. See License.txt in the project root for license information.
 # --------------------------------------------------------------------------------------------
 
+"""
+Helper functions for working with the environment, files, and other operating system features.
+"""
+
 import os
 import yaml
 
@@ -34,14 +38,14 @@ def prep_kube_config():
     else:
         kubeconfig_path = os.path.join(os.path.expanduser('~'), '.kube', 'config')
     if os.path.exists(kubeconfig_path):
-        with open(kubeconfig_path, "r+", encoding="utf-8") as fp:
-            config = yaml.safe_load(fp)
+        with open(kubeconfig_path, "r+", encoding="utf-8") as file_pointer:
+            config = yaml.safe_load(file_pointer)
             changed = False
             for key in ["clusters", "contexts", "users"]:
                 if key not in config:
                     config[key] = []
                     changed = True
             if changed:
-                fp.seek(0)
-                yaml.safe_dump(config, fp)
-                fp.truncate()
+                file_pointer.seek(0)
+                yaml.safe_dump(config, file_pointer)
+                file_pointer.truncate()

@@ -27,5 +27,6 @@ def urlretrieve(url, filename):
 
 
 def get_url_domain_name(url):
+    """Return the domain name ("netloc") of a URL."""
     domain = urlparse(url).netloc
     return domain if domain else None

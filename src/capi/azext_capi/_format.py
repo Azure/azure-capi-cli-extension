@@ -27,11 +27,11 @@ CLUSTER_TABLE_FORMAT = """\
 CLUSTERS_LIST_TABLE_FORMAT = f"items[].{CLUSTER_TABLE_FORMAT}"
 
 
-def output_for_tsv(s):
+def output_for_tsv(json_string):
     """Return JSON data to output a cluster in tab-separated format."""
-    return jmespath.search(CLUSTER_TABLE_FORMAT, json.loads(s))
+    return jmespath.search(CLUSTER_TABLE_FORMAT, json.loads(json_string))
 
 
-def output_list_for_tsv(s):
+def output_list_for_tsv(json_string):
     """Return JSON data to output a list of clusters in tab-separated format."""
-    return jmespath.search(CLUSTERS_LIST_TABLE_FORMAT, json.loads(s))
+    return jmespath.search(CLUSTERS_LIST_TABLE_FORMAT, json.loads(json_string))

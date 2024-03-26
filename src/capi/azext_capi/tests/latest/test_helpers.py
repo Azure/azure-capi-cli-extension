@@ -24,7 +24,7 @@ from azext_capi.helpers.prompt import get_user_prompt_or_default
 from azext_capi.helpers.kubectl import check_kubectl_namespace, find_attribute_in_context, find_kubectl_current_context, find_default_cluster, add_kubeconfig_to_command
 from azext_capi.helpers.names import generate_cluster_name
 from azext_capi.helpers.os import prep_kube_config
-from azext_capi.helpers.run_command import message_variants, run_shell_command, try_command_with_spinner, run_shell_command
+from azext_capi.helpers.run_command import message_variants, run_shell_command, try_command_with_spinner
 
 
 class TestSSLContextHelper(unittest.TestCase):

@@ -54,6 +54,7 @@ def load_arguments(self, _):
 
 
 def get_virtualenv():
+    """Returns the value of the `VIRTUAL_ENV` environment variable."""
     return os.getenv("VIRTUAL_ENV")
 
 
