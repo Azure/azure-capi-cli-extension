@@ -3,6 +3,10 @@
 Release History
 ===============
 
+0.1.7
++++++
+* Mask sensitive data values in --verbose or --debug log output
+
 0.1.6
 +++++
 * `--external-cloud-provider=true` is now the default for `az capi create`
