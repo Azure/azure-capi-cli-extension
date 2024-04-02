@@ -24,7 +24,7 @@ from azext_capi.helpers.prompt import get_user_prompt_or_default
 from azext_capi.helpers.kubectl import check_kubectl_namespace, find_attribute_in_context, find_kubectl_current_context, find_default_cluster, add_kubeconfig_to_command
 from azext_capi.helpers.names import generate_cluster_name
 from azext_capi.helpers.os import prep_kube_config
-from azext_capi.helpers.run_command import message_variants, run_shell_command, try_command_with_spinner
+from azext_capi.helpers.run_command import mask, message_variants, run_shell_command, try_command_with_spinner
 
 
 class TestSSLContextHelper(unittest.TestCase):
@@ -605,3 +605,70 @@ class TestGetArch(unittest.TestCase):
         }
         for arch, expected in cases.items():
             self.assertEqual(get_arch(arch), expected)
+
+
+class TestMaskOutput(unittest.TestCase):
+
+    Case = namedtuple('Case', ['mask_fields', 'input', 'output'])
+
+    cases = [
+        Case(["password"], 'password: secret', 'password: "****"'),
+
+        Case(["homeTenantId", "id", "tenantId", "name"],
+             """environmentName: AzureCloud
+homeTenantId: 12345678-9abc-def0-1234-56789abcdef0
+id: 12345678-9abc-def0-1234-56789abcdef0
+isDefault: true
+managedByTenants: []
+name: Alexei Stakhanov Dev
+state: Enabled
+tenantId: 12345678-9abc-def0-1234-56789abcdef0
+user:
+  name: 12345678-9abc-def0-1234-56789abcdef0
+  type: servicePrincipal""",
+             """environmentName: AzureCloud
+homeTenantId: "****"
+id: "****"
+isDefault: true
+managedByTenants: []
+name: "****"
+state: Enabled
+tenantId: "****"
+user:
+  name: "****"
+  type: servicePrincipal"""),
+
+        Case(["homeTenantId", "id", "tenantId", "name"],
+             """{
+  "environmentName": "AzureCloud",
+  "homeTenantId": "12345678-9abc-def0-1234-56789abcdef0",
+  "id": "12345678-9abc-def0-1234-56789abcdef0",
+  "isDefault": true,
+  "managedByTenants": [],
+  "name": "Alexei Stakhanov Dev",
+  "state": "Enabled",
+  "tenantId": "12345678-9abc-def0-1234-56789abcdef0",
+  "user": {
+    "name": "12345678-9abc-def0-1234-56789abcdef0",
+    "type": "servicePrincipal"
+  }
+}""",
+             """{
+  "environmentName": "AzureCloud",
+  "homeTenantId": "****",
+  "id": "****",
+  "isDefault": true,
+  "managedByTenants": [],
+  "name": "****",
+  "state": "Enabled",
+  "tenantId": "****",
+  "user": {
+    "name": "****",
+    "type": "servicePrincipal"
+  }
+}"""),
+    ]
+
+    def test_mask_output(self):
+        for case in self.cases:
+            self.assertEqual(mask(case.input, case.mask_fields), case.output)

@@ -131,7 +131,8 @@ def get_kubeconfig(capi_name):
     """Writes kubeconfig of specified cluster"""
     cmd = ["clusterctl", "get", "kubeconfig", capi_name]
     try:
-        output = run_shell_command(cmd)
+        mask_fields = ["certificate-authority-data", "client-certificate-data", "client-key-data"]
+        output = run_shell_command(cmd, mask_fields=mask_fields)
     except subprocess.CalledProcessError as err:
         raise UnclassifiedUserFault("Couldn't get kubeconfig") from err
     filename = capi_name + ".kubeconfig"
