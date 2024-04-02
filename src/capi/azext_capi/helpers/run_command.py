@@ -14,14 +14,38 @@ from .spinner import Spinner
 from .logger import logger, is_verbose
 
 
-def run_shell_command(command, combine_std=True):
+def run_shell_command(command, combine_std=True, mask_fields=None):
     # if --verbose, don't capture stderr
     stderr = None
     if combine_std:
         stderr = None if is_verbose() else subprocess.STDOUT
     output = subprocess.check_output(command, universal_newlines=True, stderr=stderr)
+    output = mask(output, mask_fields)
+    if mask_fields and output:
+        for field in mask_fields:
+            output = mask(output, field)
     logger.info("%s returned:\n%s", " ".join(command), output)
     return output
+
+
+def mask(output, mask_fields):
+    """Mask all instances of mask_fields with "****" in JSON or YAML output."""
+    if mask_fields and output:
+        for field in mask_fields:
+            output = mask_field(output, field)
+    return output
+
+
+def mask_field(output, key):
+    """Mask all instances of key with "****" in JSON or YAML output."""
+    lines = []
+    for line in output.splitlines():
+        if line.strip().replace('"', '').startswith(key + ": "):
+            maybe_comma = "," if line.endswith(",") else ""
+            lines.append(line.split(": ")[0] + ': "****"' + maybe_comma)
+        else:
+            lines.append(line)
+    return "\n".join(lines)
 
 
 def message_variants(template_msg):
