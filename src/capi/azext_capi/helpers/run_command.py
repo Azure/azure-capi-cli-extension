@@ -20,11 +20,8 @@ def run_shell_command(command, combine_std=True, mask_fields=None):
     if combine_std:
         stderr = None if is_verbose() else subprocess.STDOUT
     output = subprocess.check_output(command, universal_newlines=True, stderr=stderr)
-    output = mask(output, mask_fields)
-    if mask_fields and output:
-        for field in mask_fields:
-            output = mask(output, field)
-    logger.info("%s returned:\n%s", " ".join(command), output)
+    log_output = mask(output, mask_fields)
+    logger.info("%s returned:\n%s", " ".join(command), log_output)
     return output
 
 
