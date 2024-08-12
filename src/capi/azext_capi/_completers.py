@@ -9,7 +9,7 @@ This module contains functions to help with command-line prompting via the [TAB]
 
 from azure.cli.core.decorators import Completer
 
-# pylint: disable=import-outside-toplevel
+# pylint: disable=import-outside-toplevel,cyclic-import
 
 
 @Completer
